@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Variables CSS pilotées par src/theme/theme.ts (applyTheme).
+ * Tailwind les consomme via tailwind.config.ts -> changer de thème = changer
+ * ces variables, pas les composants.
+ */
+:root {
+  --primary: 29 185 84;
+  --primary-contrast: 4 20 10;
+  --bg: 10 10 10;
+  --panel: 18 18 18;
+  --card: 24 24 24;
+  --elevated: 36 36 36;
+  --line: 42 42 42;
+  --subtle: 179 179 179;
+  --text: 255 255 255;
+  --muted: 138 138 138;
+  --danger: 242 84 91;
+  --radius-card: 8px;
+  --radius-panel: 12px;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-text font-sans antialiased;
+  overflow: hidden;
+}
+
+@layer utilities {
+  /* Dégradé "néon" signature de l'Auto-Mix. */
+  .text-neon {
+    background-image: linear-gradient(
+      120deg,
+      rgb(var(--primary)) 0%,
+      rgb(var(--primary) / 0.55) 45%,
+      #ffffff 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .bg-neon {
+    background-image: linear-gradient(
+      120deg,
+      rgb(var(--primary)) 0%,
+      rgb(var(--primary) / 0.5) 60%,
+      rgb(var(--primary) / 0.2) 100%
+    );
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--elevated)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(var(--elevated));
+    border-radius: 8px;
+  }
+}

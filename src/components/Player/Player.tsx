@@ -1,0 +1,151 @@
+import { ListMusic, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+
+import { Cover } from '../common/Cover';
+import { AutoMixToggle } from '../AutoMix/AutoMixToggle';
+import { ProgressBar } from './ProgressBar';
+import { Spectrum } from './Spectrum';
+import { usePlayer } from '../../store/playerStore';
+import { formatTime } from '../../utils/format';
+
+/** Barre de lecture fixe en bas de l'application. */
+export function Player() {
+  const currentTrack = usePlayer((s) => s.currentTrack);
+  const isPlaying = usePlayer((s) => s.isPlaying);
+  const position = usePlayer((s) => s.position);
+  const duration = usePlayer((s) => s.duration);
+  const volume = usePlayer((s) => s.volume);
+  const muted = usePlayer((s) => s.muted);
+  const shuffle = usePlayer((s) => s.shuffle);
+  const repeat = usePlayer((s) => s.repeat);
+  const queueOpen = usePlayer((s) => s.queueOpen);
+  const notice = usePlayer((s) => s.notice);
+
+  const toggle = usePlayer((s) => s.toggle);
+  const next = usePlayer((s) => s.next);
+  const previous = usePlayer((s) => s.previous);
+  const seek = usePlayer((s) => s.seek);
+  const setVolume = usePlayer((s) => s.setVolume);
+  const toggleMute = usePlayer((s) => s.toggleMute);
+  const toggleShuffle = usePlayer((s) => s.toggleShuffle);
+  const cycleRepeat = usePlayer((s) => s.cycleRepeat);
+  const toggleQueue = usePlayer((s) => s.toggleQueue);
+  const clearNotice = usePlayer((s) => s.clearNotice);
+
+  const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
+
+  return (
+    <footer className="relative flex h-[88px] shrink-0 items-center gap-4 border-t border-line bg-panel px-4">
+      {/* Pochette + métadonnées */}
+      <div className="flex min-w-0 flex-1 items-center gap-3 md:w-[28%] md:flex-none">
+        <Cover
+          seed={currentTrack?.id ?? 'mixify'}
+          title={currentTrack?.title ?? 'Mixify'}
+          className="h-14 w-14 shrink-0"
+        />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">
+            {currentTrack?.title ?? 'Aucun titre'}
+          </p>
+          <p className="truncate text-xs text-muted">{currentTrack?.artist.name ?? 'Mixify'}</p>
+        </div>
+      </div>
+
+      {/* Transport + progression */}
+      <div className="flex flex-[2] flex-col items-center gap-1">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={toggleShuffle}
+            aria-pressed={shuffle}
+            aria-label="Mode aléatoire"
+            className={`transition ${shuffle ? 'text-primary' : 'text-muted hover:text-white'}`}
+          >
+            <Shuffle size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => void previous()}
+            aria-label="Titre précédent"
+            className="text-muted transition hover:text-white"
+          >
+            <SkipBack size={18} fill="currentColor" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void toggle()}
+            aria-label={isPlaying ? 'Pause' : 'Lecture'}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition hover:scale-105"
+          >
+            {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => void next()}
+            aria-label="Titre suivant"
+            className="text-muted transition hover:text-white"
+          >
+            <SkipForward size={18} fill="currentColor" />
+          </button>
+          <button
+            type="button"
+            onClick={cycleRepeat}
+            aria-label={`Répétition : ${repeat}`}
+            className={`relative transition ${repeat === 'off' ? 'text-muted hover:text-white' : 'text-primary'}`}
+          >
+            <RepeatIcon size={16} />
+          </button>
+        </div>
+
+        <div className="flex w-full max-w-2xl items-center gap-2">
+          <span className="w-10 text-right text-[11px] tabular-nums text-muted">
+            {formatTime(position)}
+          </span>
+          <ProgressBar value={position} max={duration} onChange={seek} label="Progression" className="flex-1" />
+          <span className="w-10 text-[11px] tabular-nums text-muted">{formatTime(duration)}</span>
+        </div>
+      </div>
+
+      {/* Auto-Mix, analyseur, volume, file d'attente */}
+      <div className="hidden flex-1 items-center justify-end gap-4 md:flex">
+        <AutoMixToggle />
+        <Spectrum />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleMute}
+            aria-label={muted ? 'Réactiver le son' : 'Couper le son'}
+            className="text-muted transition hover:text-white"
+          >
+            {muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
+          <ProgressBar
+            value={muted ? 0 : volume}
+            max={1}
+            onChange={setVolume}
+            label="Volume"
+            className="w-20"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={toggleQueue}
+          aria-pressed={queueOpen}
+          aria-label="File d'attente"
+          className={`transition ${queueOpen ? 'text-primary' : 'text-muted hover:text-white'}`}
+        >
+          <ListMusic size={18} />
+        </button>
+      </div>
+
+      {notice && (
+        <button
+          type="button"
+          onClick={clearNotice}
+          className="absolute -top-10 right-4 rounded-card bg-danger px-4 py-2 text-xs font-medium text-white shadow-card"
+        >
+          {notice}
+        </button>
+      )}
+    </footer>
+  );
+}
