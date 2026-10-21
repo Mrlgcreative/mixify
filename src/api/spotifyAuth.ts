@@ -45,9 +45,13 @@ export function isSpotifyConfigured(): boolean {
   return clientId().length > 0;
 }
 
-/** `http://localhost:5173/` en dev : doit être déclaré à l'identique au dashboard. */
+/** URI de redirection OAuth. */
 function redirectUri(): string {
-  return `${location.origin}${location.pathname}`;
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const configured = env?.VITE_SPOTIFY_REDIRECT_URI?.trim();
+  if (configured) return configured;
+  // Spotify exige une correspondance EXACTE (schéma, host, port, slash final).
+  return `${location.origin}/`;
 }
 
 // ------------------------------------------------------------- stockage jeton

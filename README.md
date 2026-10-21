@@ -159,8 +159,10 @@ npm run dev
 ```
 
 1. Créez une app sur [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) ;
-2. déclarez son **Redirect URI** exactement comme l'URI affichée par Mixify
-   (en dev : `http://localhost:5173/` — le port doit correspondre) ;
+2. déclarez son **Redirect URI** exactement comme celui utilisé par Mixify
+   (`http://localhost:5173/` avec slash final par défaut) — correspondance
+   stricte dans le dashboard ; le port doit correspondre. En cas de port
+   différent, définissez `VITE_SPOTIFY_REDIRECT_URI` dans `.env.local`.
 3. collez le Client ID dans `.env.local`, lancez l'app et cliquez sur
    « Connexion » dans la sidebar.
 

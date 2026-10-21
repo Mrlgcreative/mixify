@@ -10,8 +10,12 @@ interface ImportMetaEnv {
   readonly VITE_MUSIC_API?: string;
   /** Client ID Jamendo (gratuit sur https://devportal.jamendo.com). */
   readonly VITE_JAMENDO_CLIENT_ID?: string;
-  /** Client ID de l'application Spotify (flux PKCE : pas de secret côté front). */
-  readonly VITE_SPOTIFY_CLIENT_ID?: string;
+  /**
+   * URI de redirection pour le flux PKCE Spotify.
+   * Doit être identique à celui déclaré dans https://developer.spotify.com/dashboard
+   * (correspondance stricte : schéma/host/port/slash). Par défaut : origin + "/".
+   */
+  readonly VITE_SPOTIFY_REDIRECT_URI?: string;
   /** URL du backend REST (ex. https://api.mixify.dev). Absent = selon VITE_MUSIC_API. */
   readonly VITE_API_BASE_URL?: string;
   /** URL WebSocket pour les événements serveur (now-playing, lyrics…). */
