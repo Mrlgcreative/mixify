@@ -1,203 +1,652 @@
-import type { HomeFeed, Library, Playlist, SearchResults, Track } from '../types/music';
-import {
-  demoAlbums,
-  demoArtists,
-  demoLikedTracks,
-  demoPlaylists,
-  demoTracks,
-} from './demoCatalog';
-import { getDemoStreamUrl } from './demoAudio';
-import { ItunesMusicApi } from './itunesApi';
-import { JamendoMusicApi } from './jamendoApi';
-import { SpotifyMusicApi } from './spotifyApi';
+import type { AuthUser, Role } from '../types/auth';
+import type {
+  Artist,
+  ArtistDashboard,
+  ArtistInput,
+  ArtistProfile,
+  HomeFeed,
+  Library,
+  Playlist,
+  SearchResults,
+  Shelf,
+  Track,
+  TrackInput,
+} from '../types/music';
 
 /**
- * Abstraction de l'API musicale.
+ * Client du backend Mixify (Next.js, routes `/api/...`).
  *
- * Le front n'a jamais besoin de connaître la source des données : il consomme
- * l'interface `MusicApi`. Cinq implémentations sont fournies :
- *   - `ItunesMusicApi`  : classements/extraits iTunes (par défaut : sans clé) ;
- *   - `JamendoMusicApi` : catalogue public Jamendo (gratuit, client_id unique) ;
- *   - `SpotifyMusicApi` : compte Spotify (OAuth PKCE, client_id requis) ;
- *   - `HttpMusicApi`    : backend REST (+ WebSocket d'événements) ;
- *   - `DemoMusicApi`    : catalogue local + audio synthétisé, pour tourner sans
- *     aucun serveur.
- *
- * Le choix se fait via l'environnement (voir .env.example) :
- * `VITE_API_BASE_URL` d'abord (le backend de l'utilisateur gagne), puis
- * `VITE_MUSIC_API` (`demo` | `jamendo` | `spotify` | `itunes`), iTunes par
- * défaut — seule source sans clé. `jamendo` sans `VITE_JAMENDO_CLIENT_ID` et
- * `spotify` sans `VITE_SPOTIFY_CLIENT_ID` retombent sur iTunes.
+ * Le front ne connaît que les types internes (`src/types/music.ts`) : ce module
+ * mappe les réponses brutes (snake_case, durées en ms) vers ces types.
+ * Session : token JWT en localStorage, envoyé en `Authorization: Bearer`.
  */
 
-export interface ServerEvent {
-  type: 'now-playing' | 'queue-update' | 'lyrics' | 'error';
-  payload: unknown;
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(
+  /\/$/,
+  '',
+);
+
+const TOKEN_KEY = 'mixify.token';
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
-export interface MusicApi {
-  /** Contenu de la page d'accueil (bannière + rayons). */
-  getHome(): Promise<HomeFeed>;
-  /** Recherche multi-catégories. */
-  search(query: string): Promise<SearchResults>;
-  /** Détail d'une playlist. */
-  getPlaylist(id: string): Promise<Playlist>;
-  /** Bibliothèque de l'utilisateur (playlists + titres likés). */
-  getLibrary(): Promise<Library>;
-  /** URL de streaming d'un titre (CDN, backend, etc.). */
-  getStreamUrl(track: Track): Promise<string>;
-  /** Abonnement optionnel aux événements serveur (WebSocket). */
-  subscribe?(onEvent: (event: ServerEvent) => void): () => void;
+export function setToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* stockage indisponible (mode privé) : session non persistée */
+  }
 }
 
-// ---------------------------------------------------------------- HTTP client
+/** URL de départ de la connexion Google (retour sur le front avec #token=…). */
+export function googleLoginUrl(role?: Role): string {
+  const query = role === 'artiste' ? '?role=artiste' : '';
+  return `${BASE_URL}/api/auth/google${query}`;
+}
 
-export class HttpMusicApi implements MusicApi {
-  constructor(private readonly baseUrl: string) {}
+/** Résultat du retour Google (#token=… / #error=…), puis nettoie l'URL. */
+export function takeAuthCallback(): { token?: string; error?: string } {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (!params.has('token') && !params.has('error')) return {};
+  window.history.replaceState(
+    null,
+    '',
+    window.location.pathname + window.location.search,
+  );
+  return {
+    token: params.get('token') ?? undefined,
+    error: params.get('error') ?? undefined,
+  };
+}
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-    });
-    if (!response.ok) throw new Error(`API ${response.status} sur ${path}`);
-    return (await response.json()) as T;
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (init.body) headers.set('Content-Type', 'application/json');
+
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new Error('API injoignable — vérifiez que le backend est lancé');
   }
 
-  getHome(): Promise<HomeFeed> {
-    return this.request<HomeFeed>('/home');
+  const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+  if (!response.ok) {
+    throw new ApiError(payload?.error ?? `Erreur ${response.status}`, response.status);
   }
+  return payload as T;
+}
 
-  search(query: string): Promise<SearchResults> {
-    return this.request<SearchResults>(`/search?q=${encodeURIComponent(query)}`);
+/** Erreur HTTP du backend (permet de distinguer un jeton invalide d'une panne). */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
   }
+}
 
-  getPlaylist(id: string): Promise<Playlist> {
-    return this.request<Playlist>(`/playlists/${encodeURIComponent(id)}`);
-  }
-
-  getLibrary(): Promise<Library> {
-    return this.request<Library>('/library');
-  }
-
-  async getStreamUrl(track: Track): Promise<string> {
-    if (track.streamUrl) return track.streamUrl;
-    const { url } = await this.request<{ url: string }>(
-      `/tracks/${encodeURIComponent(track.id)}/stream`,
-    );
-    return url;
-  }
-
-  subscribe(onEvent: (event: ServerEvent) => void): () => void {
-    const wsUrl = import.meta.env.VITE_WS_URL as string | undefined;
-    if (!wsUrl) return () => undefined;
-    const socket = new WebSocket(wsUrl);
-    socket.onmessage = (message) => {
-      try {
-        onEvent(JSON.parse(message.data as string) as ServerEvent);
-      } catch {
-        /* message illisible : on l'ignore */
+/**
+ * PUT du fichier vers R2 avec progression.
+ * `fetch` ne remonte pas l'avancement d'un envoi : XMLHttpRequest le fait.
+ */
+function putFile(
+  url: string,
+  file: File,
+  headers: Record<string, string>,
+  onProgress?: (percent: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    for (const [name, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
       }
     };
-    return () => socket.close();
-  }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve();
+      } else {
+        reject(new Error(`Téléversement refusé par R2 (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Téléversement interrompu — vérifiez la connexion'));
+    xhr.onabort = () => reject(new Error('Téléversement annulé'));
+    xhr.send(file);
+  });
 }
 
-// ----------------------------------------------------------------- Demo mode
+// ----------------------------------------------------------- formes backend
 
-export class DemoMusicApi implements MusicApi {
+interface ApiArtist {
+  id: string;
+  name: string;
+  image_url: string | null;
+  genres: string | null;
+  user_id?: string | null;
+  slug?: string | null;
+  bio?: string | null;
+  banner_url?: string | null;
+  country?: string | null;
+  website_url?: string | null;
+  social_links?: string | null;
+  verified?: boolean | null;
+  followers_count?: number | null;
+}
+
+interface ApiTrack {
+  id: string;
+  title: string;
+  artist_id: string | null;
+  artiste: string | null;
+  album: string | null;
+  cover_url: string | null;
+  duration_ms: number | null;
+  audio_url: string | null;
+  bpm: number | null;
+  key: string | null;
+  year: number | null;
+  genre?: string | null;
+  created_at?: string | null;
+}
+
+interface ApiPlaylist {
+  id: string;
+  nom: string;
+  nb_morceaux?: number;
+}
+
+interface ApiFavorite {
+  id: string;
+  track_id?: string | null;
+  titre: string;
+  artiste: string | null;
+  track: ApiTrack | null;
+}
+
+// ---------------------------------------------------------------- mappages
+
+function toArtist(raw: ApiArtist): Artist {
+  return {
+    id: raw.id,
+    name: raw.name,
+    imageUrl: raw.image_url ?? undefined,
+    genres: raw.genres
+      ? raw.genres
+          .split(',')
+          .map((genre) => genre.trim())
+          .filter(Boolean)
+      : undefined,
+  };
+}
+
+function toArtistProfile(raw: ApiArtist): ArtistProfile {
+  return {
+    ...toArtist(raw),
+    userId: raw.user_id ?? '',
+    slug: raw.slug ?? undefined,
+    bio: raw.bio ?? undefined,
+    bannerUrl: raw.banner_url ?? undefined,
+    country: raw.country ?? undefined,
+    websiteUrl: raw.website_url ?? undefined,
+    socialLinks: raw.social_links ?? undefined,
+    verified: raw.verified === true,
+    followers: raw.followers_count ?? 0,
+  };
+}
+
+function toTrack(raw: ApiTrack): Track {
+  const artist: Artist = {
+    id: raw.artist_id ?? '',
+    name: raw.artiste ?? 'Artiste inconnu',
+  };
+  return {
+    id: raw.id,
+    title: raw.title,
+    artist,
+    album: raw.album
+      ? {
+          id: `${raw.artist_id ?? 'inconnu'}:${raw.album}`,
+          title: raw.album,
+          coverUrl: raw.cover_url ?? undefined,
+          year: raw.year ?? undefined,
+          artist,
+        }
+      : undefined,
+    duration: (raw.duration_ms ?? 0) / 1000,
+    streamUrl: raw.audio_url ?? undefined,
+    bpm: raw.bpm ?? undefined,
+    key: raw.key ?? undefined,
+    genre: raw.genre ?? undefined,
+    year: raw.year ?? undefined,
+  };
+}
+
+function toPlaylist(raw: ApiPlaylist): Playlist {
+  return {
+    id: raw.id,
+    title: raw.nom,
+    description: raw.nb_morceaux === undefined ? undefined : `${raw.nb_morceaux} titres`,
+    tracks: [],
+  };
+}
+
+/** Morceau favori : catalogue complet, ou simple cache pour un morceau externe. */
+function toLikedTrack(raw: ApiFavorite): Track {
+  if (raw.track) return toTrack(raw.track);
+  return {
+    id: `favori-${raw.id}`,
+    title: raw.titre,
+    artist: { id: '', name: raw.artiste ?? 'Artiste inconnu' },
+    duration: 0,
+  };
+}
+
+// ------------------------------------------------------------------- client
+
+export interface MusicApi {
+  getHome(): Promise<HomeFeed>;
+  search(query: string): Promise<SearchResults>;
+  getPlaylist(id: string): Promise<Playlist>;
+  getLibrary(): Promise<Library>;
+  getStreamUrl(track: Track): Promise<string>;
+  getTracks(): Promise<Track[]>;
+  /** Favoris de l'utilisateur : `track_id` -> identifiant du favori. */
+  getFavoriteIds(): Promise<Record<string, string>>;
+  addFavorite(trackId: string): Promise<string>;
+  removeFavorite(favoriteId: string): Promise<void>;
+  createPlaylist(nom: string): Promise<void>;
+  renamePlaylist(id: string, nom: string): Promise<void>;
+  deletePlaylist(id: string): Promise<void>;
+  addTrackToPlaylist(playlistId: string, trackId: string): Promise<void>;
+  removeTrackFromPlaylist(playlistTrackId: string): Promise<void>;
+  /** Téléverse le fichier vers R2 puis publie le morceau au catalogue. */
+  uploadTrack(
+    file: File,
+    input: PublishInput,
+    onStage?: (stage: PublishStage) => void,
+    onProgress?: (percent: number) => void,
+  ): Promise<Track>;
+  /** Profil artiste + catalogue du compte connecté (null s'il n'y a pas encore de profil). */
+  getMyArtist(): Promise<ArtistDashboard | null>;
+  createArtist(input: ArtistInput): Promise<ArtistProfile>;
+  updateArtist(id: string, input: ArtistInput): Promise<ArtistProfile>;
+  updateTrack(id: string, input: TrackInput): Promise<void>;
+  deleteTrack(id: string): Promise<void>;
+}
+
+/** Étapes visibles du pipeline de publication. */
+export type PublishStage = 'upload' | 'check';
+
+/** Champs saisis lors de la publication d'un morceau. */
+export interface PublishInput {
+  title: string;
+  album?: string;
+  bpm?: number;
+  year?: number;
+  /** Durée en secondes, lue par le lecteur avant l'envoi. */
+  duration?: number;
+}
+
+/** Champs artiste au format attendu par le backend (snake_case). */
+function toApiArtistFields(input: ArtistInput) {
+  return {
+    name: input.name,
+    bio: input.bio || null,
+    image_url: input.imageUrl || null,
+    banner_url: input.bannerUrl || null,
+    genres: input.genres || null,
+    country: input.country || null,
+    website_url: input.websiteUrl || null,
+    social_links: input.socialLinks || null,
+  };
+}
+
+class MixifyApi implements MusicApi {
+  /** Playlists de l'utilisateur connecté (vide sans session). */
+  private async myPlaylists(): Promise<Playlist[]> {
+    if (!getToken()) return [];
+    const { playlists } = await request<{ playlists: ApiPlaylist[] }>('/api/playlists');
+    return playlists.map(toPlaylist);
+  }
+
   async getHome(): Promise<HomeFeed> {
+    const [{ tracks }, { artists }, playlists] = await Promise.all([
+      request<{ tracks: ApiTrack[] }>('/api/tracks'),
+      request<{ artists: ApiArtist[] }>('/api/artists'),
+      this.myPlaylists().catch(() => []),
+    ]);
+
+    const mappedTracks = tracks.map(toTrack);
+    const withTempo = mappedTracks.filter((track) => track.bpm);
     const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
+
+    const shelves: Shelf[] = [
+      {
+        id: 'nouveautes',
+        title: 'Nouveautés',
+        subtitle: 'Derniers morceaux publiés',
+        items: mappedTracks,
+      },
+      {
+        id: 'tempo',
+        title: 'Mix par tempo',
+        subtitle: 'Enchaînement du plus lent au plus rapide',
+        items: [...withTempo].sort((a, b) => (a.bpm ?? 0) - (b.bpm ?? 0)),
+      },
+      {
+        id: 'artistes',
+        title: 'Artistes',
+        subtitle: 'Les profils du catalogue',
+        items: artists.map(toArtist),
+      },
+    ];
+    if (playlists.length > 0) {
+      shelves.push({
+        id: 'playlists',
+        title: 'Vos playlists',
+        subtitle: 'Votre bibliothèque',
+        items: playlists,
+      });
+    }
+
     return {
-      greeting,
-      shelves: [
-        {
-          id: 'shelf-fresh',
-          title: 'Nouveautés pour vous',
-          subtitle: 'Fraîchement sorties',
-          items: demoTracks.slice(0, 6),
-        },
-        {
-          id: 'shelf-mix',
-          title: 'Mix automatique',
-          subtitle: 'Enchaînés pour un passage fluide',
-          items: demoPlaylists,
-        },
-        {
-          id: 'shelf-albums',
-          title: 'Albums du moment',
-          items: demoAlbums,
-        },
-        {
-          id: 'shelf-focus',
-          title: 'Pour rester dans le flow',
-          items: demoTracks.slice(6, 12),
-        },
-        {
-          id: 'shelf-artists',
-          title: 'Artistes à suivre',
-          items: demoArtists,
-        },
-      ],
+      greeting: hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir',
+      shelves: shelves.filter((shelf) => shelf.items.length > 0),
     };
   }
 
   async search(query: string): Promise<SearchResults> {
-    const q = query.trim().toLowerCase();
-    const match = (value: string) => value.toLowerCase().includes(q);
+    const q = query.trim();
+    const [{ tracks }, { artists }, playlists] = await Promise.all([
+      request<{ tracks: ApiTrack[] }>(`/api/tracks?search=${encodeURIComponent(q)}`),
+      request<{ artists: ApiArtist[] }>(`/api/artists?search=${encodeURIComponent(q)}`),
+      this.myPlaylists().catch(() => []),
+    ]);
+    const needle = q.toLowerCase();
+
     return {
-      tracks: demoTracks.filter((t) => match(t.title) || match(t.artist.name)),
-      albums: demoAlbums.filter((a) => match(a.title) || match(a.artist?.name ?? '')),
-      artists: demoArtists.filter((a) => match(a.name)),
-      playlists: demoPlaylists.filter((p) => match(p.title)),
+      tracks: tracks.map(toTrack),
+      albums: [],
+      artists: artists.map(toArtist),
+      playlists: playlists.filter((playlist) => playlist.title.toLowerCase().includes(needle)),
     };
   }
 
   async getPlaylist(id: string): Promise<Playlist> {
-    const playlist = demoPlaylists.find((p) => p.id === id);
-    if (!playlist) throw new Error(`Playlist inconnue : ${id}`);
-    return playlist;
+    const { playlist, morceaux } = await request<{
+      playlist: ApiPlaylist;
+      morceaux: Array<{ id: string; track: ApiTrack | null }>;
+    }>(`/api/playlists/${encodeURIComponent(id)}`);
+
+    return {
+      ...toPlaylist(playlist),
+      tracks: morceaux
+        .filter((entry): entry is { id: string; track: ApiTrack } => entry.track !== null)
+        .map((entry) => ({
+          ...toTrack(entry.track),
+          playlistEntryId: entry.id,
+        })),
+    };
   }
 
   async getLibrary(): Promise<Library> {
-    return { playlists: demoPlaylists, liked: demoLikedTracks };
+    if (!getToken()) {
+      throw new Error('Connectez-vous pour accéder à votre bibliothèque');
+    }
+    const [{ favorites }, playlists] = await Promise.all([
+      request<{ favorites: ApiFavorite[] }>('/api/favorites'),
+      this.myPlaylists(),
+    ]);
+
+    return {
+      playlists,
+      liked: (favorites ?? []).map(toLikedTrack),
+    };
   }
 
   async getStreamUrl(track: Track): Promise<string> {
     if (track.streamUrl) return track.streamUrl;
-    return getDemoStreamUrl(track);
+    const { track: raw } = await request<{ track: ApiTrack }>(
+      `/api/tracks/${encodeURIComponent(track.id)}`,
+    );
+    if (!raw?.audio_url) throw new Error(`Aucun fichier audio pour « ${track.title} »`);
+    return raw.audio_url;
+  }
+
+  async getTracks(): Promise<Track[]> {
+    const { tracks } = await request<{ tracks: ApiTrack[] }>('/api/tracks');
+    return tracks.map(toTrack);
+  }
+
+  async getMyArtist(): Promise<ArtistDashboard | null> {
+    if (!getToken()) return null;
+    try {
+      const { artiste, morceaux, stats } = await request<{
+        artiste: ApiArtist;
+        morceaux: ApiTrack[];
+        stats?: { total_duration_ms?: number };
+      }>('/api/artists/me');
+
+      const artist = toArtistProfile(artiste);
+      // Les morceaux de /artists/me n'incluent pas le nom d'artiste : on le fournit
+      const tracks = [...(morceaux ?? [])]
+        .sort(
+          (a, b) =>
+            new Date(b.created_at ?? 0).getTime() -
+            new Date(a.created_at ?? 0).getTime(),
+        )
+        .map((track) => toTrack({ ...track, artiste: artist.name }));
+
+      return {
+        artist,
+        tracks,
+        totalDurationMs:
+          stats?.total_duration_ms ??
+          tracks.reduce((total, track) => total + track.duration * 1000, 0),
+      };
+    } catch (error) {
+      // Pas encore de profil : l'espace artiste propose de le créer
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async createArtist(input: ArtistInput): Promise<ArtistProfile> {
+    const { artist } = await request<{ artist: ApiArtist }>('/api/artists', {
+      method: 'POST',
+      body: JSON.stringify(toApiArtistFields(input)),
+    });
+    return toArtistProfile(artist);
+  }
+
+  async updateArtist(id: string, input: ArtistInput): Promise<ArtistProfile> {
+    const { artist } = await request<{ artist: ApiArtist }>(
+      `/api/artists/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(toApiArtistFields(input)),
+      },
+    );
+    return toArtistProfile(artist);
+  }
+
+  async updateTrack(id: string, input: TrackInput): Promise<void> {
+    await request(`/api/tracks/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: input.title,
+        album: input.album || null,
+        genre: input.genre || null,
+        bpm: input.bpm ?? null,
+        key: input.key || null,
+        year: input.year ?? null,
+      }),
+    });
+  }
+
+  async deleteTrack(id: string): Promise<void> {
+    await request(`/api/tracks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async getFavoriteIds(): Promise<Record<string, string>> {
+    const { favorites } = await request<{ favorites: ApiFavorite[] }>('/api/favorites');
+    return Object.fromEntries(
+      favorites
+        .filter((favorite) => favorite.track_id)
+        .map((favorite) => [favorite.track_id as string, favorite.id]),
+    );
+  }
+
+  async addFavorite(trackId: string): Promise<string> {
+    const { favorite } = await request<{ favorite: { id: string } }>('/api/favorites', {
+      method: 'POST',
+      body: JSON.stringify({ track_id: trackId }),
+    });
+    return favorite.id;
+  }
+
+  async removeFavorite(favoriteId: string): Promise<void> {
+    await request(`/api/favorites?id=${encodeURIComponent(favoriteId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async createPlaylist(nom: string): Promise<void> {
+    await request('/api/playlists', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', nom }),
+    });
+  }
+
+  async renamePlaylist(id: string, nom: string): Promise<void> {
+    await request(`/api/playlists/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ nom }),
+    });
+  }
+
+  async deletePlaylist(id: string): Promise<void> {
+    await request(`/api/playlists?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  async addTrackToPlaylist(playlistId: string, trackId: string): Promise<void> {
+    await request('/api/playlists', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'add_track', playlist_id: playlistId, track_id: trackId }),
+    });
+  }
+
+  async removeTrackFromPlaylist(playlistTrackId: string): Promise<void> {
+    await request(`/api/playlists?type=track&id=${encodeURIComponent(playlistTrackId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async uploadTrack(
+    file: File,
+    input: PublishInput,
+    onStage?: (stage: PublishStage) => void,
+    onProgress?: (percent: number) => void,
+  ): Promise<Track> {
+    const contentType = file.type || 'audio/mpeg';
+    const { uploadUrl, publicUrl, key, headers } = await request<{
+      uploadUrl: string;
+      publicUrl: string;
+      key: string;
+      headers?: Record<string, string>;
+    }>('/api/tracks/upload-url', {
+      method: 'POST',
+      body: JSON.stringify({ filename: file.name, contentType }),
+    });
+
+    // PUT direct vers R2 : pas de token Mixify dans cet appel (URL présignée).
+    onStage?.('upload');
+    await putFile(uploadUrl, file, headers ?? { 'Content-Type': contentType }, onProgress);
+
+    // Le serveur contrôle le fichier stocké avant de le rendre public.
+    onStage?.('check');
+    const { track } = await request<{ track: ApiTrack }>('/api/tracks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: input.title,
+        album: input.album,
+        bpm: input.bpm,
+        year: input.year,
+        duration_ms: input.duration ? Math.round(input.duration * 1000) : undefined,
+        audio_url: publicUrl,
+        audio_key: key,
+      }),
+    });
+    return toTrack(track);
   }
 }
 
-// ----------------------------------------------------------------- Singleton
+export const api: MusicApi = new MixifyApi();
 
-const mode = (import.meta.env.VITE_MUSIC_API as string | undefined)?.trim().toLowerCase();
-const jamendoClientId = (import.meta.env.VITE_JAMENDO_CLIENT_ID as string | undefined)?.trim();
-const spotifyClientId = (import.meta.env.VITE_SPOTIFY_CLIENT_ID as string | undefined)?.trim();
-const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+// --------------------------------------------------------------------- auth
 
-/** Source retenue : backend > démo > Jamendo > Spotify > iTunes (défaut sans clé). */
-const source = baseUrl
-  ? 'http'
-  : mode === 'demo'
-    ? 'demo'
-    : mode === 'jamendo' && jamendoClientId
-      ? 'jamendo'
-      : mode === 'spotify' && spotifyClientId
-        ? 'spotify'
-        : 'itunes';
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
 
-export const api: MusicApi =
-  source === 'http'
-    ? new HttpMusicApi(baseUrl as string)
-    : source === 'demo'
-      ? new DemoMusicApi()
-      : source === 'jamendo'
-        ? new JamendoMusicApi(jamendoClientId as string)
-        : source === 'spotify'
-          ? new SpotifyMusicApi()
-          : new ItunesMusicApi();
+export function loginRequest(email: string, password: string, role?: Role): Promise<AuthResponse> {
+  return request<AuthResponse>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, role }),
+  });
+}
 
-export const isDemoMode = source === 'demo';
-export const isSpotifyMode = source === 'spotify';
+export function registerRequest(input: {
+  email: string;
+  password: string;
+  name: string;
+  role: string;
+  birthDate?: string;
+  artist?: {
+    genres?: string;
+    bio?: string;
+    country?: string;
+    websiteUrl?: string;
+  };
+}): Promise<AuthResponse> {
+  return request<AuthResponse>('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: input.email,
+      password: input.password,
+      name: input.name,
+      role: input.role,
+      birth_date: input.birthDate,
+      artist: input.artist
+        ? {
+            genres: input.artist.genres,
+            bio: input.artist.bio,
+            country: input.artist.country,
+            website_url: input.artist.websiteUrl,
+          }
+        : undefined,
+    }),
+  });
+}
+
+export function meRequest(): Promise<{ user: AuthUser }> {
+  return request<{ user: AuthUser }>('/api/auth/me');
+}

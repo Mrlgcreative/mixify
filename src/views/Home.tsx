@@ -1,11 +1,12 @@
 import { Loader2, Play } from 'lucide-react';
 
 import { Carousel } from '../components/common/Carousel';
+import { Cover } from '../components/common/Cover';
 import { MediaCard } from '../components/common/MediaCard';
 import { useHomeFeed } from '../hooks/useMusicApi';
 import { usePlayer } from '../store/playerStore';
 import { isAlbum, isArtist, isPlaylist, isTrack } from '../utils/guards';
-import type { Shelf } from '../types/music';
+import type { Shelf, Track } from '../types/music';
 
 interface ShelfProps {
   shelf: Shelf;
@@ -75,8 +76,34 @@ function ShelfRow({ shelf }: ShelfProps) {
   );
 }
 
+/** Raccourci compact d'une ligne : pochette, titre, lecture au survol. */
+function Shortcut({ track, queue }: { track: Track; queue: Track[] }) {
+  const playTrack = usePlayer((s) => s.playTrack);
+  const currentTrack = usePlayer((s) => s.currentTrack);
+  const toggle = usePlayer((s) => s.toggle);
+
+  const active = currentTrack?.id === track.id;
+
+  return (
+    <button
+      type="button"
+      onClick={() => (active ? void toggle() : void playTrack(track, queue))}
+      className="group flex items-center gap-3 overflow-hidden rounded-card bg-white/10 pr-3 text-left transition hover:bg-white/20"
+    >
+      <Cover seed={track.id} title={track.title} className="h-12 w-12 shrink-0 text-sm" />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
+        {track.title}
+      </span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-black opacity-0 transition group-hover:opacity-100">
+        <Play size={14} fill="currentColor" className="ml-0.5" />
+      </span>
+    </button>
+  );
+}
+
 export function Home() {
   const { data, loading, error } = useHomeFeed();
+  const greeting = data?.greeting ?? '';
   const playTrack = usePlayer((s) => s.playTrack);
 
   if (loading) {
@@ -93,33 +120,64 @@ export function Home() {
 
   const firstShelf = data.shelves[0];
   const heroTracks = firstShelf?.items.filter(isTrack) ?? [];
+  const hero = heroTracks[0];
+
+  // Raccourcis : les six premiers titres du catalogue publié.
+  const catalog = data.shelves.find((shelf) => shelf.id === 'nouveautes')?.items ?? [];
+  const shortcuts = catalog.filter(isTrack).slice(0, 6);
+  const otherShelves = data.shelves.filter((shelf) => shelf !== firstShelf);
 
   return (
     <div className="px-4 pb-10 md:px-6">
-      {/* Bannière */}
-      <section className="relative mb-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/35 via-elevated to-panel p-8">
-        <div className="relative z-10">
-          <p className="text-sm font-medium text-white/80">{data.greeting}</p>
-          <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-            Ton mix du jour est prêt
-          </h2>
-          <p className="mt-2 max-w-md text-sm text-white/70">
-            Enchaînement automatique, tempo aligné, transitions sans couture.
-          </p>
-          <button
-            type="button"
-            onClick={() => heroTracks[0] && void playTrack(heroTracks[0], heroTracks)}
-            className="mt-5 flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-black transition hover:scale-105"
-          >
-            <Play size={16} fill="currentColor" /> Lancer le mix
-          </button>
+      <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+        {greeting}
+      </h2>
+
+      {shortcuts.length > 0 && (
+        <section className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {shortcuts.map((track) => (
+            <Shortcut key={track.id} track={track} queue={catalog.filter(isTrack)} />
+          ))}
+        </section>
+      )}
+
+      {/* Bannière du mix du jour */}
+      <section className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/35 via-elevated to-panel p-8">
+        <div className="relative flex flex-wrap items-center gap-6">
+          <Cover
+            seed={hero?.id ?? 'mixify'}
+            title={hero?.title ?? 'Mixify'}
+            rounded="panel"
+            className="hidden h-32 w-32 text-2xl shadow-card md:flex"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
+              {greeting} · mix du jour
+            </p>
+            <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+              Ton mix du jour est prêt
+            </h2>
+            <p className="mt-2 max-w-md text-sm text-white/70">
+              Enchaînement automatique, tempo aligné, transitions sans couture.
+            </p>
+            <button
+              type="button"
+              onClick={() => hero && void playTrack(hero, heroTracks)}
+              disabled={!hero}
+              className="mt-5 flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-black transition enabled:hover:scale-105 disabled:opacity-40"
+            >
+              <Play size={16} fill="currentColor" /> Lancer le mix
+            </button>
+          </div>
         </div>
         <div className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 rounded-full bg-primary/30 blur-3xl" />
       </section>
 
-      {data.shelves.map((shelf) => (
-        <ShelfRow key={shelf.id} shelf={shelf} />
-      ))}
+      <div className="mt-8">
+        {otherShelves.map((shelf) => (
+          <ShelfRow key={shelf.id} shelf={shelf} />
+        ))}
+      </div>
     </div>
   );
 }

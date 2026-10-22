@@ -1,0 +1,761 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import {
+  BadgeCheck,
+  Disc3,
+  Globe,
+  LayoutDashboard,
+  Loader2,
+  Music4,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  UserRound,
+  X,
+} from 'lucide-react';
+
+import { api } from '../api/musicApi';
+import { Cover } from '../components/common/Cover';
+import { TrackList } from '../components/common/TrackList';
+import { useMyArtist } from '../hooks/useMusicApi';
+import type {
+  ArtistDashboard,
+  ArtistInput,
+  ArtistProfile,
+  Track,
+  TrackInput,
+} from '../types/music';
+import { Publish } from './Publish';
+
+type Tab = 'overview' | 'tracks' | 'publish' | 'profile';
+
+const TABS: Array<{ id: Tab; label: string; icon: typeof Music4 }> = [
+  { id: 'overview', label: "Vue d'ensemble", icon: LayoutDashboard },
+  { id: 'tracks', label: 'Morceaux', icon: Music4 },
+  { id: 'publish', label: 'Publier', icon: Upload },
+  { id: 'profile', label: 'Profil', icon: UserRound },
+];
+
+const inputClass =
+  'w-full rounded-card border border-line bg-elevated px-3 py-2.5 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none';
+
+const labelClass = 'flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted';
+
+function formatDuration(ms: number): string {
+  if (!ms) return '0 min';
+  const minutes = Math.round(ms / 60000);
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+/** Lien cliquable uniquement pour une URL http(s) : évite les schémas dangereux. */
+function safeUrl(url?: string): string | undefined {
+  return url && /^https?:\/\//i.test(url) ? url : undefined;
+}
+
+/** Espace artiste : tableau de bord, catalogue, publication et profil. */
+export function ArtistStudio() {
+  const [revision, setRevision] = useState(0);
+  const { data, loading, error } = useMyArtist(revision);
+  const [tab, setTab] = useState<Tab>('overview');
+  const refresh = () => setRevision((value) => value + 1);
+
+  // Premier passage sans profil : on ouvre directement le formulaire de création
+  useEffect(() => {
+    if (!loading && data === null) setTab('profile');
+  }, [data, loading]);
+
+  if (loading && !data && !error) {
+    return (
+      <div className="flex h-40 items-center justify-center gap-3 text-muted">
+        <Loader2 className="animate-spin" size={18} /> Chargement de l'espace artiste…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-danger">Impossible de charger l'espace artiste : {error}</p>
+        <button
+          type="button"
+          onClick={refresh}
+          className="mt-3 rounded-full border border-line px-4 py-2 text-sm font-semibold text-white hover:border-muted"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
+
+  const empty = (
+    <div className="mx-4 mt-6 rounded-panel bg-card p-6 md:mx-6">
+      <h2 className="text-xl font-bold text-white">Crée ton profil artiste</h2>
+      <p className="mt-1 max-w-lg text-sm text-muted">
+        Un profil est nécessaire pour publier des morceaux. Tu pourras ensuite gérer ton
+        catalogue, tes informations publiques et tes sorties.
+      </p>
+      <button
+        type="button"
+        onClick={() => setTab('profile')}
+        className="mt-4 flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-black transition hover:scale-[1.01]"
+      >
+        <Plus size={16} /> Créer mon profil
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="pb-10">
+      <nav className="flex gap-1 overflow-x-auto border-b border-line px-4 md:px-6">
+        {TABS.map((item) => {
+          const Icon = item.icon;
+          const active = tab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              aria-current={active ? 'page' : undefined}
+              className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold transition ${
+                active
+                  ? 'border-primary text-white'
+                  : 'border-transparent text-muted hover:text-white'
+              }`}
+            >
+              <Icon size={17} className={active ? 'text-primary' : ''} />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {tab === 'overview' &&
+        (data ? (
+          <Overview data={data} onTab={setTab} />
+        ) : (
+          empty
+        ))}
+
+      {tab === 'tracks' &&
+        (data ? (
+          <TracksTab tracks={data.tracks} onRefresh={refresh} onPublish={() => setTab('publish')} />
+        ) : (
+          empty
+        ))}
+
+      {tab === 'publish' && <Publish onPublished={refresh} />}
+
+      {tab === 'profile' && (
+        <ProfileForm
+          key={data?.artist.id ?? 'nouveau'}
+          artist={data?.artist}
+          onSaved={refresh}
+        />
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------- vue d'ensemble
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-panel bg-card p-4">
+      <p className="text-2xl font-extrabold text-white">{value}</p>
+      <p className="mt-1 text-xs uppercase tracking-wide text-muted">{label}</p>
+    </div>
+  );
+}
+
+function Overview({
+  data,
+  onTab,
+}: {
+  data: ArtistDashboard;
+  onTab: (tab: Tab) => void;
+}) {
+  const { artist, tracks, totalDurationMs } = data;
+  const albums = new Set(tracks.map((track) => track.album?.title).filter(Boolean)).size;
+  const website = safeUrl(artist.websiteUrl);
+
+  return (
+    <div className="px-4 md:px-6">
+      <section className="relative mt-4 overflow-hidden rounded-panel bg-gradient-to-br from-primary/30 via-elevated to-panel">
+        {artist.bannerUrl && (
+          <div
+            className="h-32 bg-cover bg-center opacity-70 md:h-40"
+            style={{ backgroundImage: `url(${JSON.stringify(artist.bannerUrl)})` }}
+          />
+        )}
+        <div className="relative z-10 flex flex-col gap-4 p-5 sm:flex-row sm:items-end">
+          {artist.imageUrl ? (
+            <img
+              src={artist.imageUrl}
+              alt={artist.name}
+              className="h-24 w-24 shrink-0 rounded-full border-4 border-panel object-cover"
+            />
+          ) : (
+            <Cover
+              seed={artist.id}
+              title={artist.name}
+              rounded="full"
+              className="h-24 w-24 shrink-0 border-4 border-panel text-2xl"
+            />
+          )}
+
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              Profil artiste
+            </p>
+            <h2 className="flex items-center gap-2 text-3xl font-extrabold tracking-tight text-white">
+              <span className="truncate">{artist.name}</span>
+              {artist.verified && (
+                <BadgeCheck size={22} className="shrink-0 text-primary" aria-label="Profil vérifié" />
+              )}
+            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/70">
+              {artist.genres && artist.genres.length > 0 && (
+                <span>{artist.genres.join(' · ')}</span>
+              )}
+              {artist.country && <span>{artist.country}</span>}
+              {website && (
+                <a
+                  href={website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 hover:text-white"
+                >
+                  <Globe size={13} /> Site
+                </a>
+              )}
+            </div>
+            {artist.bio && <p className="mt-2 max-w-2xl text-sm text-white/75">{artist.bio}</p>}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onTab('publish')}
+              className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-black transition hover:scale-[1.01]"
+            >
+              <Upload size={15} /> Publier
+            </button>
+            <button
+              type="button"
+              onClick={() => onTab('profile')}
+              className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/50"
+            >
+              <Pencil size={14} /> Modifier
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Morceaux" value={tracks.length} />
+        <Stat label="Durée totale" value={formatDuration(totalDurationMs)} />
+        <Stat label="Albums" value={albums} />
+        <Stat label="Abonnés" value={artist.followers} />
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-2 flex items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold text-white">Derniers morceaux</h3>
+            <p className="text-xs text-muted">Les plus récents de ton catalogue.</p>
+          </div>
+          {tracks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onTab('tracks')}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              Tout voir
+            </button>
+          )}
+        </div>
+        {tracks.length > 0 ? (
+          <TrackList tracks={tracks.slice(0, 5)} />
+        ) : (
+          <div className="rounded-panel bg-card p-6 text-sm text-muted">
+            Aucun morceau pour l'instant.{' '}
+            <button
+              type="button"
+              onClick={() => onTab('publish')}
+              className="font-semibold text-primary hover:underline"
+            >
+              Publie ton premier titre
+            </button>
+            .
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------- morceaux
+
+function TracksTab({
+  tracks,
+  onRefresh,
+  onPublish,
+}: {
+  tracks: Track[];
+  onRefresh: () => void;
+  onPublish: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<Track | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const filtered = tracks.filter((track) =>
+    [track.title, track.album?.title, track.genre]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
+
+  const remove = async (track: Track) => {
+    if (
+      !window.confirm(
+        `Supprimer « ${track.title} » ? Le fichier audio sera aussi supprimé du stockage.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setRemoving(track.id);
+    try {
+      await api.deleteTrack(track.id);
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Suppression impossible');
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  return (
+    <div className="px-4 md:px-6">
+      <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-tight text-white">Mes morceaux</h2>
+          <p className="text-sm text-muted">
+            {tracks.length} titre{tracks.length > 1 ? 's' : ''} · {formatDuration(
+              tracks.reduce((total, track) => total + track.duration * 1000, 0),
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filtrer…"
+            aria-label="Filtrer mes morceaux"
+            className="w-40 rounded-full border border-line bg-elevated px-3 py-2 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none sm:w-52"
+          />
+          <button
+            type="button"
+            onClick={onPublish}
+            className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-black transition hover:scale-[1.01]"
+          >
+            <Plus size={15} /> Ajouter
+          </button>
+        </div>
+      </div>
+
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+
+      <div className="mt-4">
+        {filtered.length > 0 ? (
+          <TrackList
+            tracks={filtered}
+            showAlbum
+            renderActions={(track) => (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditing(track)}
+                  title="Modifier les informations"
+                  aria-label={`Modifier ${track.title}`}
+                  className="opacity-60 transition hover:text-white hover:opacity-100"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void remove(track)}
+                  disabled={removing === track.id}
+                  title="Supprimer le morceau"
+                  aria-label={`Supprimer ${track.title}`}
+                  className="opacity-60 transition hover:text-danger hover:opacity-100 disabled:opacity-30"
+                >
+                  {removing === track.id ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={15} />
+                  )}
+                </button>
+              </>
+            )}
+          />
+        ) : (
+          <div className="rounded-panel bg-card p-6 text-sm text-muted">
+            {tracks.length === 0
+              ? 'Ton catalogue est vide.'
+              : 'Aucun morceau ne correspond au filtre.'}
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <TrackEditDialog
+          track={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            onRefresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TrackEditDialog({
+  track,
+  onClose,
+  onSaved,
+}: {
+  track: Track;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(track.title);
+  const [album, setAlbum] = useState(track.album?.title ?? '');
+  const [genre, setGenre] = useState(track.genre ?? '');
+  const [key, setKey] = useState(track.key ?? '');
+  const [bpm, setBpm] = useState(track.bpm?.toString() ?? '');
+  const [year, setYear] = useState(track.year?.toString() ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setBusy(true);
+    setError(null);
+    const input: TrackInput = {
+      title: title.trim(),
+      album: album.trim() || undefined,
+      genre: genre.trim() || undefined,
+      key: key.trim() || undefined,
+      bpm: bpm ? Number(bpm) : undefined,
+      year: year ? Number(year) : undefined,
+    };
+    try {
+      await api.updateTrack(track.id, input);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Enregistrement impossible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Modifier ${track.title}`}
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        onSubmit={submit}
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-panel bg-panel p-5"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-white">Modifier le morceau</h2>
+            <p className="text-xs text-muted">Les fichiers audio ne sont pas remplacés.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className="rounded-full p-1 text-muted transition hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          <label className={labelClass}>
+            Titre
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              required
+              className={inputClass}
+            />
+          </label>
+          <label className={labelClass}>
+            Album
+            <input
+              value={album}
+              onChange={(event) => setAlbum(event.target.value)}
+              placeholder="Optionnel"
+              className={inputClass}
+            />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={labelClass}>
+              Genre
+              <input
+                value={genre}
+                onChange={(event) => setGenre(event.target.value)}
+                placeholder="rap, pop…"
+                className={inputClass}
+              />
+            </label>
+            <label className={labelClass}>
+              Tonalité
+              <input
+                value={key}
+                onChange={(event) => setKey(event.target.value)}
+                placeholder="Am, C#…"
+                className={inputClass}
+              />
+            </label>
+            <label className={labelClass}>
+              BPM
+              <input
+                type="number"
+                min={1}
+                max={300}
+                value={bpm}
+                onChange={(event) => setBpm(event.target.value)}
+                placeholder="120"
+                className={inputClass}
+              />
+            </label>
+            <label className={labelClass}>
+              Année
+              <input
+                type="number"
+                min={1900}
+                max={2100}
+                value={year}
+                onChange={(event) => setYear(event.target.value)}
+                placeholder="2026"
+                className={inputClass}
+              />
+            </label>
+          </div>
+        </div>
+
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full px-4 py-2 text-sm font-semibold text-muted hover:text-white"
+          >
+            Annuler
+          </button>
+          <button
+            type="submit"
+            disabled={busy || !title.trim()}
+            className="flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-bold text-black transition enabled:hover:scale-[1.01] disabled:opacity-40"
+          >
+            {busy && <Loader2 size={15} className="animate-spin" />}
+            {busy ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------- profil
+
+function ProfileForm({
+  artist,
+  onSaved,
+}: {
+  artist?: ArtistProfile;
+  onSaved: () => void;
+}) {
+  const [input, setInput] = useState<ArtistInput>({
+    name: artist?.name ?? '',
+    bio: artist?.bio ?? '',
+    imageUrl: artist?.imageUrl ?? '',
+    bannerUrl: artist?.bannerUrl ?? '',
+    genres: artist?.genres?.join(', ') ?? '',
+    country: artist?.country ?? '',
+    websiteUrl: artist?.websiteUrl ?? '',
+    socialLinks: artist?.socialLinks ?? '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const set = (field: keyof ArtistInput) => (
+    event: { target: { value: string } },
+  ) => setInput((current) => ({ ...current, [field]: event.target.value }));
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!input.name.trim()) return;
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      if (artist) await api.updateArtist(artist.id, input);
+      else await api.createArtist(input);
+      setDone(artist ? 'Profil mis à jour.' : 'Profil artiste créé.');
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Enregistrement impossible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="px-4 md:px-6">
+      <div className="mt-5">
+        <h2 className="text-2xl font-extrabold tracking-tight text-white">
+          {artist ? 'Profil artiste' : 'Créer ton profil artiste'}
+        </h2>
+        <p className="mt-1 max-w-xl text-sm text-muted">
+          {artist
+            ? 'Ces informations sont publiques : elles apparaissent dans le catalogue et sur tes morceaux.'
+            : 'Choisis le nom sous lequel tu publieras. Tu pourras compléter ta bio et tes liens plus tard.'}
+        </p>
+      </div>
+
+      <form onSubmit={submit} className="mt-5 flex max-w-2xl flex-col gap-4">
+        <label className={labelClass}>
+          Nom d'artiste
+          <input
+            value={input.name}
+            onChange={set('name')}
+            placeholder="Ton nom de scène"
+            required
+            className={inputClass}
+          />
+        </label>
+
+        <label className={labelClass}>
+          Bio
+          <textarea
+            value={input.bio}
+            onChange={set('bio')}
+            rows={4}
+            placeholder="Quelques mots sur ton univers musical…"
+            className={inputClass}
+          />
+        </label>
+
+        <label className={labelClass}>
+          Genres (séparés par des virgules)
+          <input
+            value={input.genres}
+            onChange={set('genres')}
+            placeholder="rap, soul, electro"
+            className={inputClass}
+          />
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className={labelClass}>
+            Pays
+            <input
+              value={input.country}
+              onChange={set('country')}
+              placeholder="France"
+              className={inputClass}
+            />
+          </label>
+          <label className={labelClass}>
+            Site web
+            <input
+              value={input.websiteUrl}
+              onChange={set('websiteUrl')}
+              placeholder="https://…"
+              className={inputClass}
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className={labelClass}>
+            Photo (URL)
+            <input
+              value={input.imageUrl}
+              onChange={set('imageUrl')}
+              placeholder="https://…/photo.jpg"
+              className={inputClass}
+            />
+          </label>
+          <label className={labelClass}>
+            Bannière (URL)
+            <input
+              value={input.bannerUrl}
+              onChange={set('bannerUrl')}
+              placeholder="https://…/banner.jpg"
+              className={inputClass}
+            />
+          </label>
+        </div>
+
+        <label className={labelClass}>
+          Réseaux / liens (un par ligne)
+          <textarea
+            value={input.socialLinks}
+            onChange={set('socialLinks')}
+            rows={3}
+            placeholder={'https://instagram.com/…\nhttps://youtube.com/@…'}
+            className={inputClass}
+          />
+        </label>
+
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {done && <p className="text-sm text-primary">{done}</p>}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={busy || !input.name.trim()}
+            className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-black transition enabled:hover:scale-[1.01] disabled:opacity-40"
+          >
+            {busy && <Loader2 size={16} className="animate-spin" />}
+            {busy ? 'Enregistrement…' : artist ? 'Enregistrer' : 'Créer mon profil'}
+          </button>
+          {artist && (
+            <p className="text-xs text-muted">
+              <Disc3 size={13} className="mr-1 inline-block" />
+              {artist.followers} abonné{artist.followers > 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}

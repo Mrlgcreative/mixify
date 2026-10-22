@@ -31,11 +31,19 @@ body,
 }
 
 body {
-  @apply bg-bg text-text font-sans antialiased;
+  @apply bg-bg bg-grid text-text font-sans antialiased;
   overflow: hidden;
 }
 
 @layer utilities {
+  /* Quadrillage discret du fond (suit la couleur de thème). */
+  .bg-grid {
+    background-image:
+      linear-gradient(rgb(var(--line) / 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--line) / 0.4) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
   /* Dégradé "néon" signature de l'Auto-Mix. */
   .text-neon {
     background-image: linear-gradient(

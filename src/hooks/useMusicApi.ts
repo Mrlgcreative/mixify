@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api/musicApi';
-import type { HomeFeed, Library, Playlist, SearchResults } from '../types/music';
+import { useLibraryStore } from '../store/libraryStore';
+import type { ArtistDashboard, HomeFeed, Library, Playlist, SearchResults, Track } from '../types/music';
 
 interface AsyncState<T> {
   data: T | null;
@@ -45,7 +46,8 @@ function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): AsyncState<T> {
 
 /** Contenu de la page d'accueil. */
 export function useHomeFeed(): AsyncState<HomeFeed> {
-  return useAsync(() => api.getHome(), []);
+  const playlistRevision = useLibraryStore((state) => state.playlistRevision);
+  return useAsync(() => api.getHome(), [playlistRevision]);
 }
 
 /** Recherche (déclenchée par `query`). */
@@ -60,13 +62,26 @@ export function useSearch(query: string): AsyncState<SearchResults> {
 
 /** Détail d'une playlist. */
 export function usePlaylist(id: string | null): AsyncState<Playlist> {
+  const playlistRevision = useLibraryStore((state) => state.playlistRevision);
   return useAsync(async () => {
     if (!id) throw new Error('Aucune playlist sélectionnée');
     return api.getPlaylist(id);
-  }, [id]);
+  }, [id, playlistRevision]);
 }
 
 /** Bibliothèque de l'utilisateur. */
 export function useLibrary(): AsyncState<Library> {
-  return useAsync(() => api.getLibrary(), []);
+  const favoriteRevision = useLibraryStore((state) => state.favoriteRevision);
+  const playlistRevision = useLibraryStore((state) => state.playlistRevision);
+  return useAsync(() => api.getLibrary(), [favoriteRevision, playlistRevision]);
+}
+
+/** Catalogue complet (sélecteur d'ajout dans une playlist). */
+export function useTracks(): AsyncState<Track[]> {
+  return useAsync(() => api.getTracks(), []);
+}
+
+/** Espace artiste : profil + morceaux du compte (relancé via `revision`). */
+export function useMyArtist(revision = 0): AsyncState<ArtistDashboard | null> {
+  return useAsync(() => api.getMyArtist(), [revision]);
 }

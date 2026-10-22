@@ -60,7 +60,7 @@ export const theme: Theme = {
 
 /** Palette de reciproches proposée dans les réglages (accent color). */
 export const accentPresets: Array<{ name: string; value: string }> = [
-  { name: 'Vert Spotify', value: '#1DB954' },
+  { name: 'Vert Mixify', value: '#1DB954' },
   { name: 'Rose Apple Music', value: '#FA243C' },
   { name: 'Violet', value: '#8B5CF6' },
   { name: 'Cyan', value: '#22D3EE' },
