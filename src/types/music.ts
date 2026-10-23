@@ -12,6 +12,49 @@ export interface Artist {
   followers?: number;
 }
 
+/** Profil artiste complet (espace artiste : édition, bannière, bio…). */
+export interface ArtistProfile extends Artist {
+  userId: string;
+  slug?: string;
+  bio?: string;
+  bannerUrl?: string;
+  country?: string;
+  websiteUrl?: string;
+  socialLinks?: string;
+  verified: boolean;
+  followers: number;
+}
+
+/** Données de l'espace artiste : profil + catalogue personnel. */
+export interface ArtistDashboard {
+  artist: ArtistProfile;
+  tracks: Track[];
+  totalDurationMs: number;
+}
+
+/** Champs modifiables du profil artiste. */
+export interface ArtistInput {
+  name: string;
+  bio?: string;
+  imageUrl?: string;
+  bannerUrl?: string;
+  /** Genres séparés par des virgules (format stocké par le backend). */
+  genres?: string;
+  country?: string;
+  websiteUrl?: string;
+  socialLinks?: string;
+}
+
+/** Champs modifiables d'un morceau. */
+export interface TrackInput {
+  title: string;
+  album?: string;
+  genre?: string;
+  bpm?: number;
+  key?: string;
+  year?: number;
+}
+
 export interface Album {
   id: string;
   title: string;
@@ -34,7 +77,12 @@ export interface Track {
   bpm?: number;
   /** Tonalité, affichée dans le panneau latéral. */
   key?: string;
+  /** Genre musical (texte libre). */
+  genre?: string;
+  year?: number;
   explicit?: boolean;
+  /** Identifiant de l'entrée dans une playlist (`playlist_tracks`). */
+  playlistEntryId?: string;
 }
 
 export interface Playlist {
@@ -75,7 +123,7 @@ export interface Library {
 export type RepeatMode = 'off' | 'all' | 'one';
 
 /** Vue de l'application (pas de router : navigation locale pilotée par l'état). */
-export type ViewName = 'home' | 'search' | 'library';
+export type ViewName = 'home' | 'search' | 'library' | 'artist';
 /** État du lecteur — miroir du store Zustand. */
 export interface PlayerState {
   queue: Track[];

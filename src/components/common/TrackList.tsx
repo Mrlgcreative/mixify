@@ -1,7 +1,8 @@
-import type { DragEvent } from 'react';
-import { GripVertical, ListPlus, Pause, Play, Trash2 } from 'lucide-react';
+import type { DragEvent, ReactNode } from 'react';
+import { GripVertical, Heart, ListPlus, Pause, Play, Trash2 } from 'lucide-react';
 
 import { Cover } from './Cover';
+import { useLibraryStore } from '../../store/libraryStore';
 import { usePlayer } from '../../store/playerStore';
 import type { Track } from '../../types/music';
 
@@ -13,6 +14,10 @@ interface TrackListProps {
   sortable?: boolean;
   /** Met en évidence la ligne du titre en cours. */
   highlightCurrent?: boolean;
+  /** Affiche un bouton de retrait (édition d'une playlist). */
+  onRemove?: (track: Track) => void;
+  /** Actions propres à l'appelant (espace artiste : éditer, supprimer). */
+  renderActions?: (track: Track) => ReactNode;
 }
 
 function formatTime(seconds: number): string {
@@ -28,6 +33,8 @@ export function TrackList({
   showAlbum = false,
   sortable = false,
   highlightCurrent = true,
+  onRemove,
+  renderActions,
 }: TrackListProps) {
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
@@ -37,6 +44,8 @@ export function TrackList({
   const reorderQueue = usePlayer((s) => s.reorderQueue);
   const removeFromQueue = usePlayer((s) => s.removeFromQueue);
   const addToQueue = usePlayer((s) => s.addToQueue);
+  const favorites = useLibraryStore((s) => s.favorites);
+  const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
 
   const onDragStart = (index: number) => (event: DragEvent) => {
     event.dataTransfer.setData('text/plain', String(index));
@@ -54,6 +63,7 @@ export function TrackList({
     <ul className="flex flex-col">
       {tracks.map((track, index) => {
         const isCurrent = highlightCurrent && currentTrack?.id === track.id;
+        const liked = Boolean(favorites[track.id]);
         return (
           <li
             key={track.id}
@@ -99,7 +109,24 @@ export function TrackList({
 
             <div className="flex items-center gap-3 text-xs text-muted">
               {showAlbum && <span className="hidden max-w-[180px] truncate md:block">{track.album?.title}</span>}
+              {!sortable && (
+                <button
+                  type="button"
+                  onClick={() => void toggleFavorite(track.id)}
+                  aria-pressed={liked}
+                  title={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                  aria-label={
+                    liked ? `Retirer ${track.title} des favoris` : `Ajouter ${track.title} aux favoris`
+                  }
+                  className={
+                    liked ? 'text-primary' : 'opacity-0 transition group-hover:opacity-100 hover:text-white'
+                  }
+                >
+                  <Heart size={15} fill={liked ? 'currentColor' : 'none'} />
+                </button>
+              )}
               <span className="tabular-nums">{formatTime(track.duration)}</span>
+              {renderActions?.(track)}
               {sortable ? (
                 <button
                   type="button"
@@ -112,15 +139,28 @@ export function TrackList({
                   <Trash2 size={15} />
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => addToQueue(track)}
-                  title="Ajouter à la file d'attente"
-                  aria-label={`Ajouter ${track.title} à la file d'attente`}
-                  className="opacity-0 transition group-hover:opacity-100 hover:text-white"
-                >
-                  <ListPlus size={15} />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => addToQueue(track)}
+                    title="Ajouter à la file d'attente"
+                    aria-label={`Ajouter ${track.title} à la file d'attente`}
+                    className="opacity-0 transition group-hover:opacity-100 hover:text-white"
+                  >
+                    <ListPlus size={15} />
+                  </button>
+                  {onRemove && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(track)}
+                      title="Retirer de la playlist"
+                      aria-label={`Retirer ${track.title} de la playlist`}
+                      className="opacity-0 transition group-hover:opacity-100 hover:text-danger"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </li>

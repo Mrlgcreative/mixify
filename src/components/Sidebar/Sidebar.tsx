@@ -1,9 +1,9 @@
-import { Heart, Home, Library, Search } from 'lucide-react';
+import { Heart, Home, Library, Search, Mic2 } from 'lucide-react';
 
+import { AuthPanel } from '../Auth/AuthPanel';
 import { Logo } from '../Logo/Logo';
-import { isDemoMode, isSpotifyMode } from '../../api/musicApi';
-import { isSpotifyLoggedIn, spotifyLogin, spotifyLogout } from '../../api/spotifyAuth';
 import { useHomeFeed } from '../../hooks/useMusicApi';
+import { useAuthStore } from '../../store/authStore';
 import type { Playlist, ViewName } from '../../types/music';
 
 interface SidebarProps {
@@ -26,7 +26,13 @@ const NAV_ITEMS: Array<{ view: ViewName; label: string; icon: typeof Home }> = [
 /** Navigation principale + raccourcis. */
 export function Sidebar({ view, onNavigate, onSelectPlaylist }: SidebarProps) {
   const { data } = useHomeFeed();
+  const user = useAuthStore((s) => s.user);
   const playlists = (data?.shelves.flatMap((shelf) => shelf.items) ?? []).filter(isPlaylist);
+  const canPublish =
+    user?.role === 'artiste' || user?.role === 'developper' || user?.role === 'admin';
+  const items = canPublish
+    ? [...NAV_ITEMS, { view: 'artist' as const, label: 'Espace artiste', icon: Mic2 }]
+    : NAV_ITEMS;
 
   return (
     <aside className="hidden w-[240px] shrink-0 flex-col gap-6 rounded-panel bg-panel p-3 md:flex">
@@ -35,7 +41,7 @@ export function Sidebar({ view, onNavigate, onSelectPlaylist }: SidebarProps) {
       </div>
 
       <nav className="flex flex-col gap-1">
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
           const active = view === item.view;
           return (
@@ -79,53 +85,14 @@ export function Sidebar({ view, onNavigate, onSelectPlaylist }: SidebarProps) {
             </li>
           ))}
           {playlists.length === 0 && (
-            <li className="px-3 py-2 text-sm text-muted">Chargement…</li>
+            <li className="px-3 py-2 text-sm text-muted">
+              {data ? 'Aucune playlist' : 'Chargement…'}
+            </li>
           )}
         </ul>
       </div>
 
-      {isSpotifyMode && <SpotifyAccount />}
-
-      {isDemoMode && (
-        <p className="rounded-card bg-elevated px-3 py-2 text-[11px] leading-relaxed text-muted">
-          Mode démo — catalogue et audio générés localement.
-        </p>
-      )}
+      <AuthPanel />
     </aside>
-  );
-}
-
-/**
- * Connexion au compte Spotify (flux PKCE) : la connexion et le retour
- * `?code=` déclenchent un aller-retour complet, aucun état local à synchroniser.
- */
-function SpotifyAccount() {
-  const connected = isSpotifyLoggedIn();
-  return (
-    <div className="flex items-center justify-between rounded-card bg-elevated px-3 py-2">
-      <span className="text-[11px] text-muted">
-        {connected ? 'Spotify connecté' : 'Spotify déconnecté'}
-      </span>
-      {connected ? (
-        <button
-          type="button"
-          onClick={() => {
-            spotifyLogout();
-            window.location.reload();
-          }}
-          className="text-[11px] font-medium text-subtle transition hover:text-white"
-        >
-          Se déconnecter
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => void spotifyLogin()}
-          className="text-[11px] font-medium text-primary transition hover:text-white"
-        >
-          Connexion
-        </button>
-      )}
-    </div>
   );
 }

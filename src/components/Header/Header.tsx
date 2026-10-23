@@ -17,6 +17,7 @@ const TITLES: Record<ViewName, string> = {
   home: 'Accueil',
   search: 'Rechercher',
   library: 'Bibliothèque',
+  artist: 'Espace artiste',
 };
 
 /** Header sticky : historique de navigation + recherche. */

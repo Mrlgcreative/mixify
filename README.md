@@ -1,226 +1,159 @@
-# Mixify
+# Mixify — Front
 
-Front-end d'un lecteur de streaming musical inspiré de Spotify, avec une
-fonctionnalité clé : **l'Auto-Mix**, un enchaînement automatique avec fondu
-intelligent (crossfade + beat-sync) calculé en Web Audio API.
+Front React + TypeScript du catalogue Mixify. Application séparée du backend
+Next.js : elle consomme l'API en HTTP (`/api/...`) avec un token JWT.
+
+Sa valeur propre : le **lecteur Web Audio** (double deck, fondu enchaîné,
+beat-sync) et le mix trié par tempo à partir des BPM fournis par le catalogue.
 
 ## Stack
 
-| Besoin            | Choix                                          |
-| ----------------- | ---------------------------------------------- |
-| Framework         | React 18 + TypeScript strict                   |
-| Build             | Vite 6                                         |
-| Styles            | Tailwind CSS 3 + variables CSS (thème à chaud) |
-| État              | Zustand (store du lecteur + file d'attente)    |
-| Icônes            | lucide-react                                   |
-| Audio             | Web Audio API (double deck + gains)            |
+| Besoin   | Choix                                         |
+| -------- | --------------------------------------------- |
+| Framework | React 18 + TypeScript strict                 |
+| Build    | Vite 6                                        |
+| Styles   | Tailwind CSS 3 + variables CSS (thème à chaud) |
+| État     | Zustand (lecteur, file d'attente, session)    |
+| Audio    | Web Audio API (double deck + gains)           |
 
 ## Démarrage
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # tsc -b && vite build
-npm test           # tests unitaires du moteur de fondu (node:test)
+cp .env.example .env.local     # VITE_API_BASE_URL=http://localhost:3001
+npm run dev                    # http://localhost:5173
+npm test                       # moteur de fondu (node:test)
+npm run build                  # tsc -b && vite build
 ```
 
-Sans configuration, l'application tourne en **mode démonstration** : catalogue
-local et pistes audio **synthétisées dans le navigateur** (WAV PCM, tempo
-exact). L'Auto-Mix est donc réellement vérifiable sans serveur ni réseau.
+Le backend doit tourner sur `http://localhost:3001` (`npm run dev` dans le dépôt
+Mixify). Le port **5173 est figé** (`strictPort`) : le CORS du backend et la
+règle CORS du bucket R2 dépendent de cette origine exacte.
+
+`VITE_API_BASE_URL` est lue **au build** : sur Vercel, renseignez-la avec le
+domaine de l'API avant de déployer.
+
+## Comptes et session
+
+- Première visite : **onboarding** (3 écrans) puis **connexion** ou **inscription** ;
+  l'application (accueil, recherche, bibliothèque) n'est accessible qu'avec un compte.
+  Le drapeau `mixify.onboarded` évite de rejouer l'onboarding.
+- Les deux appels concurrents de reprise de session (StrictMode) sont dédoublonnés :
+  un jeton n'est effacé que si l'API répond **401**.
+- Le JWT est conservé dans `localStorage` (`mixify.token`) et envoyé en
+  `Authorization: Bearer`. Un XSS pourrait donc le lire ; si le front et l'API
+  passent un jour sur un domaine commun, on pourra utiliser un cookie `httpOnly`.
+- **Deux portails séparés**, avec une connexion en **2 étapes** (email, puis mot
+  de passe) sur les deux :
+  - « Auditeur » : inscription en **2 étapes** (compte, puis date de naissance —
+    13 ans minimum) ;
+  - « Artiste » : inscription en **3 étapes** (compte, identité avec date de
+    naissance, puis profil public). Le portail artiste refuse les comptes
+    auditeurs côté API (403).
+- **Connexion Google** : disponible depuis le portail auditeur (connexion et
+  inscription). Le backend porte le OAuth 2.0 (variables `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET` et `FRONT_URL`), puis renvoie le jeton au front dans le
+  fragment d'URL (`#token=…`) — consommé puis effacé au démarrage. Un nouveau
+  compte Google est créé en `utilisateur`, sans date de naissance (facultative
+  côté API) ; l'inscription artiste se fait par email pour la collecter. Callback
+  à déclarer dans la console Google :
+  `http://localhost:3001/api/auth/google/callback`.
+
+## Fonctionnalités
+
+- **Favoris** : cœur sur chaque titre (listes), visible dans « Titres likés ».
+- **Playlists** : création, renommage, suppression, ajout/retrait de titres
+  depuis la page dédiée `/playlist/<id>` (URL partageable, boutons précédent/suivant
+  du navigateur pris en charge).
+- **Espace artiste** (rôles `artiste`, `developper`, `admin`) : un seul écran
+  avec quatre onglets.
+  - **Vue d'ensemble** : bannière, photo, bio, genres, liens, statistiques
+    (morceaux, durée, albums, abonnés) et derniers titres.
+  - **Morceaux** : catalogue personnel, filtre, lecture, édition des métadonnées
+    (titre, album, genre, BPM, tonalité, année) et suppression du morceau + fichier.
+  - **Publier** : choix d'un fichier audio, **écoute locale avant mise en ligne**,
+    envoi direct vers R2 via URL présignée, puis **contrôle serveur** (propriété,
+    format, taille) avant publication au catalogue. L'interface affiche les étapes
+    de téléversement et de contrôle. Le profil artiste est créé automatiquement au
+    premier envoi s'il n'existe pas encore.
+  - **Profil** : création ou édition du profil public (nom, bio, genres, pays,
+    site, photo, bannière, réseaux).
+
+## Routes consommées
+
+| Écran / action        | Requête                                              |
+| --------------------- | ---------------------------------------------------- |
+| Accueil, recherche    | `GET /api/tracks?search=`, `GET /api/artists?search=` |
+| Lecture audio         | `audio_url` R2 renvoyée par l'API                    |
+| Connexion             | `POST /api/auth/login` (`role: "artiste"` pour le portail artiste), puis `GET /api/auth/me` |
+| Inscription           | `POST /api/auth/register` (`role: "utilisateur"` + `birth_date`, ou `"artiste"` + `birth_date` + `artist`) |
+| Bibliothèque          | `GET /api/favorites`, `GET /api/playlists`           |
+| Favoris               | `POST /api/favorites`, `DELETE /api/favorites?id=`   |
+| Playlists             | `GET/POST/DELETE /api/playlists`, `PATCH /api/playlists/:id` |
+| Détail d'une playlist | `GET /api/playlists/:id`                              |
+| Espace artiste        | `GET /api/artists/me`, `POST /api/artists`, `PATCH /api/artists/:id` |
+| Gestion des morceaux  | `PATCH /api/tracks/:id`, `DELETE /api/tracks/:id`     |
+| Publication           | `POST /api/tracks/upload-url`, `PUT` R2, `POST /api/tracks` (avec `audio_key`) |
+
+Le détail complet (codes, upload, quotas) est documenté par le backend sur
+`http://localhost:3001/docs`.
+
+### CORS
+
+1. Backend : `ALLOWED_ORIGINS` doit contenir `http://localhost:5173` (et le
+   domaine du front en production).
+2. Bucket R2 : autoriser les mêmes origines en `GET`, `HEAD`, `PUT` — sans cela
+   la lecture audio (Web Audio exige CORS) et l'upload présigné échouent.
 
 ## Structure
 
 ```
 src/
-├── api/
-│   ├── demoAudio.ts        # synthèse WAV locale (mode démo)
-│   ├── demoCatalog.ts      # catalogue de démonstration
-│   ├── itunesApi.ts        # adaptateur iTunes (défaut, artistes reconnus)
-│   ├── jamendoApi.ts       # adaptateur Jamendo (catalogue libre complet)
-│   ├── jamendoApi.test.ts  # tests du mappage (fixtures réelles)
-│   ├── spotifyApi.ts       # adaptateur Spotify (compte utilisateur)
-│   ├── spotifyAuth.ts      # flux OAuth PKCE (connexion, callback, refresh)
-│   └── musicApi.ts         # contrat MusicApi + sélection de l'implémentation
+├── api/musicApi.ts        # client HTTP, mappages backend -> types du front, token
 ├── audio/
-│   ├── crossfade.ts        # calcul pur : courbes, tempo, alignement
-│   ├── crossfade.test.ts   # tests unitaires (node:test)
-│   └── engine.ts           # moteur Web Audio à double deck
+│   ├── crossfade.ts       # calcul pur : courbes, tempo, alignement
+│   ├── crossfade.test.ts  # tests unitaires (node:test)
+│   ├── tempo.ts           # estimation de BPM côté client (repli)
+│   └── engine.ts          # moteur Web Audio à double deck
 ├── components/
-│   ├── AutoMix/            # AutoMixToggle, CrossfadeSettings
-│   ├── Header/             # header sticky (historique + recherche)
-│   ├── Logo/               # logo SVG interchangeable
-│   ├── Player/             # barre de lecture, seek bar, analyseur FFT
-│   ├── Queue/              # panneau latéral (file + réglages)
-│   ├── Sidebar/            # navigation + playlists
-│   └── common/             # Cover, Carousel, MediaCard, TrackList
-├── hooks/useMusicApi.ts    # hooks d'accès à l'API (loading / error / abort)
-├── store/playerStore.ts    # store Zustand : lecteur + file d'attente
-├── theme/theme.ts          # couleurs, rayons, logo, accent à chaud
-├── types/music.ts          # Track, Album, Artist, Playlist, PlayerState…
-├── utils/                  # formatage temps, guards de types
-├── views/                  # Home, Search, Library
-└── App.tsx                 # layout + navigation (historique local)
+│   ├── Auth/              # écrans connexion / inscription, compte connecté
+│   ├── Onboarding/        # première visite (3 étapes)
+│   ├── AutoMix/           # AutoMixToggle, CrossfadeSettings
+│   ├── Header/            # header sticky (historique + recherche)
+│   ├── Player/            # barre de lecture, seek bar, analyseur FFT
+│   ├── Queue/             # file d'attente
+│   ├── Sidebar/           # navigation, playlists, compte
+│   └── common/            # Cover, Carousel, MediaCard, TrackList
+├── hooks/useMusicApi.ts   # chargement / erreur / réponses obsolètes
+├── store/
+│   ├── authStore.ts       # session (login, register, me, logout)
+│   ├── libraryStore.ts    # favoris + révisions (rechargement bibliothèque)
+│   └── playerStore.ts     # lecteur + file d'attente
+├── types/                 # Track, Album, Artist, Playlist, AuthUser…
+├── views/                 # Home, Search, Library, ArtistStudio (+ Publish intégré)
+└── App.tsx                # onboarding -> auth -> layout, navigation locale
 ```
 
-## Comment fonctionne l'Auto-Mix
+## Auto-Mix
 
-1. **Deux decks** : chaque `<audio>` passe par un `GainNode` → `AnalyserNode` →
-   master. Le titre suivant est préchargé dans le deck libre.
-2. **Fenêtre de fondu** : à `durée du fondu` secondes de la fin du titre
-   courant, le moteur plan la transition (`src/audio/engine.ts`).
-3. **Courbes à puissance constante** (`sin`/`cos`) : le niveau perçu ne creuse
-   jamais au milieu du fondu, contrairement à une interpolation linéaire. Les
-   rampes sont programmées sur l'horloge de l'`AudioContext` (précision
-   échantillon).
-4. **Beat-sync** : le tempo du titre entrant est aligné sur celui du titre
-   sortant (plafonné à ±8 % pour préserver le pitch) et son premier downbeat est
-   calé sur un downbeat du titre sortant (`planBeatSync` dans
-   `src/audio/crossfade.ts`).
-5. **Repli sûr** : si le flux entrant échoue ou n'est pas prêt, le fondu est
-   annulé et le titre courant se termine seul (pas de trou de silence).
+1. Chaque titre est joué dans un `<audio>` → `GainNode` → `AnalyserNode` →
+   master ; le suivant est préchargé dans le deck libre.
+2. À `durée du fondu` secondes de la fin, les courbes `sin`/`cos` (puissance
+   constante) sont programmées sur l'horloge de l'`AudioContext`.
+3. Le tempo du titre entrant est aligné sur le sortant (±8 %, pitch préservé) et
+   son premier downbeat est calé sur un downbeat sortant.
+4. Sans BPM fourni par l'API, le tempo est estimé côté client
+   (`src/audio/tempo.ts`) ; si l'estimation n'est pas fiable, le fondu reste
+   égal-puissance.
 
-La durée du fondu est réglable de **0 à 12 s** (panneau latéral → *Réglages*),
-et l'état est persisté dans `localStorage`.
+Le fondu (0 à 12 s) est réglable dans les réglages de la file d'attente et
+persisté dans `localStorage`.
 
-## Thème
-
-`src/theme/theme.ts` est la source de vérité des couleurs. Les valeurs sont
-écrites dans des variables CSS (`--primary`, `--bg`, `--card`…) que Tailwind
-consomme (`tailwind.config.ts`). Pour changer la couleur primaire — remplacer
-le vert `#1DB954` — :
-
-```ts
-export const theme = { colors: { primary: '#8B5CF6', /* … */ } };
-```
-
-ou, sans toucher au code, via la pastille « Couleur d'accentuation » de
-l'onglet *Réglages* (le changement est immédiat et persiste). Le logo
-(`src/components/Logo/Logo.tsx`) est un SVG inline qui utilise les mêmes
-variables : le remplacer par une image se fait en une ligne.
-
-## Catalogue réel sans backend
-
-Source choisie via `VITE_MUSIC_API` dans `.env.local` (`VITE_API_BASE_URL`,
-s'il est défini, prime toujours pour héberger vos propres titres) :
-
-| Valeur     | Catalogue                                              | Lecture            |
-| ---------- | ------------------------------------------------------ | ------------------ |
-| `itunes` **(défaut)** | Artistes reconnus, classements fr/ng/us/ru, **sans clé** | Extraits de 30 s ⚠️ |
-| `jamendo`  | ≈ 500 000 titres Creative Commons (client_id requis)    | Intégrale (mp3)    |
-| `spotify`  | Votre compte : playlists, likés, écoutes récentes (OAuth) | Extraits de 30 s ⚠️ |
-| `demo`     | Local + audio synthétisé, 100 % hors-ligne             | Intégrale (synthé) |
-
-### iTunes — artistes reconnus (défaut)
-
-`src/api/itunesApi.ts` consomme l'[API publique Apple](https://developer.apple.com/documentation/itunes_search_api)
-(sans clé ni OAuth) : `/search` (titres, albums, artistes) et les flux RSS
-`/{pays}/rss/topsongs|topalbums` pour les rayons « Top France / Top Afrique
-(Nigeria) / Top États-Unis / Top Russie », réutilisés comme playlists de la
-bibliothèque. Vérifié en réel avant câblage :
-
-| Point                     | Résultat                                                    |
-| ------------------------- | ----------------------------------------------------------- |
-| CORS sur `/search` et les flux RSS | `access-control-allow-origin: *` (pas de proxy) |
-| CORS sur le CDN audio `audio-ssl.itunes.apple.com` | `*` — MediaElementSource non teinté, pas de silence |
-| Format audio              | extrait m4a mesuré à **30.000998 s** (`duration` = durée jouée) |
-| Chansons complètes        | ❌ aucune API gratuite ne livre les titres des majors        |
-| BPM / playlists publiques | ❌ ni tempo, ni API de playlists : les classements en tiennent lieu (le BPM est estimé côté client, voir plus bas) |
-
-L'Auto-Mix fonctionne sur ces extraits (le fondu s'arme sur `el.duration`
-réel), mais chaque titre s'arrête à 30 s : pour des morceaux complets, il faut
-le backend (ci-dessous) ou `VITE_MUSIC_API=jamendo`.
-
-### Jamendo — lecture intégrale, catalogue libre
-
-Créez un `client_id` gratuit sur [devportal.jamendo.com](https://devportal.jamendo.com)
-puis :
-
-```bash
-printf 'VITE_MUSIC_API=jamendo\nVITE_JAMENDO_CLIENT_ID=xxxxxxxx\n' > .env.local
-npm run dev
-```
-
-`src/api/jamendoApi.ts` implémente `MusicApi` et se contente de mapper les
-réponses vers `Track` / `Album` / `Playlist`. Ce qui a été vérifié avant câblage
-(en-têtes réels, pas de suppositions) :
-
-| Point                  | Résultat                                                              |
-| ---------------------- | --------------------------------------------------------------------- |
-| CORS sur `api.jamendo.com` | `access-control-allow-origin: *`                                  |
-| CORS sur le CDN audio  | host racine `storage.jamendo.com` → `*` fiable (les hotes `prod-N` renvoient un ACAO périmé : l'adaptateur réécrit l'URL) |
-| Format audio           | mp3 complet (`mp31`/`mp32`), pas un extrait de 30 s                    |
-| BPM                    | **non exposé** par l'API (seulement `musicinfo.speed`, 5 paliers)      |
-
-### Spotify — votre compte (flux OAuth PKCE)
-
-```bash
-printf 'VITE_MUSIC_API=spotify\nVITE_SPOTIFY_CLIENT_ID=xxxxxxxx\n' > .env.local
-npm run dev
-```
-
-1. Créez une app sur [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) ;
-2. déclarez son **Redirect URI** exactement comme celui utilisé par Mixify
-   (`http://localhost:5173/` avec slash final par défaut) — correspondance
-   stricte dans le dashboard ; le port doit correspondre. En cas de port
-   différent, définissez `VITE_SPOTIFY_REDIRECT_URI` dans `.env.local`.
-3. collez le Client ID dans `.env.local`, lancez l'app et cliquez sur
-   « Connexion » dans la sidebar.
-
-`src/api/spotifyAuth.ts` implémente le flux PKCE **sans serveur** : aller chez
-Spotify, retour `?code=` échangé contre les jetons avant le premier rendu
-(URL nettoyée d'office), auto-refresh du jeton d'accès (1 h) et déconnexion.
-Le `client_secret` n'existe pas — il ne doit jamais arriver côté front.
-`src/api/spotifyApi.ts` mappe ensuite recherche / playlists / bibliothèque /
-écoutes récentes vers `MusicApi` (pistes BPM : estimé côté client, voir plus
-bas).
-
-⚠️ **Extraits de 30 s retirés** : depuis novembre 2024, Spotify ne fournit plus
-`preview_url` aux applications nouvelles. Les titres reviennent alors sans flux
-audio : rayons et recherche les excluent, un clic dans une playlist affiche la
-notice « aucun extrait ». Avec une application antérieure ou une extension
-Spotify accordée, la lecture fonctionne normalement. Aucun endpoint public ne
-remplace ces extraits.
-
-Aucune API gratuite n'expose de BPM : l'Auto-Mix l'estime donc **côté client**
-(`src/audio/tempo.ts`) à partir du signal lui-même — enveloppe d'attaques puis
-filtre en peigne (70–180 BPM + phase), mené indépendamment sur chaque moitié de
-la fenêtre d'analyse ; les deux moitiés doivent s'accorder pour retenir
-l'estimation. Un BPM fourni par l'API (`Track.bpm`, mode `demo` ou backend
-maison) prime toujours. Sans BPM fiable — bruit, silence, intros sans
-pulsation — le fondu garde le chemin égal-puissance : jamais de tempo inventé.
-
-> Les fiches de playlist Jamendo n'ont pas d'image d'API : la couverture est
-> reprise du premier titre, `Cover.tsx` se charge du dégradé de repli. La
-> bibliothèque « favoris » reste vide tant qu'il n'y a pas de bouton « J'aime »
-> (ce serait du flux OAuth2). Les pochettes réelles (iTunes, Jamendo) existent
-> dans les données mais ne sont **pas encore branchées** à `MediaCard`.
-
-## Brancher un vrai backend
-
-Renseignez `VITE_API_BASE_URL` (voir `.env.example`) : l'app bascule
-automatiquement sur `HttpMusicApi`. Le contrat attendu est :
-
-| Méthode                | Endpoint REST                       | Retour                  |
-| ---------------------- | ----------------------------------- | ----------------------- |
-| `getHome()`            | `GET /home`                         | `HomeFeed`              |
-| `search(q)`            | `GET /search?q=`                    | `SearchResults`         |
-| `getPlaylist(id)`      | `GET /playlists/:id`                | `Playlist`              |
-| `getLibrary()`         | `GET /library`                      | `Library`               |
-| `getStreamUrl(track)`  | `GET /tracks/:id/stream`            | `{ url }`               |
-
-`VITE_WS_URL` active en plus un abonnement WebSocket (`api.subscribe`) pour
-recevoir des événements serveur (`now-playing`, `queue-update`, `lyrics`).
-
-> **CORS obligatoire** : le moteur Web Audio a besoin de convertir le média en
-> nœud audio. Un flux servi sans en-tête `Access-Control-Allow-Origin` est
-> « tainted » et produit du silence. Passez par un backend qui relaie les
-> streams (ou activez des CORS sur le CDN).
-
-## Limites connues
+## Limites actuelles
 
 - Pas de routeur : la navigation utilise un historique local (`App.tsx`).
-  Pour des URLs partageables, brancher `react-router-dom` sur les trois vues.
-- Les pochettes sont des dégradés génératifs (pas d'images) pour rester
-  hors-ligne ; les vraies couvertures arrivent via `coverUrl`.
-- Pas de paroles synchronisées : le type `ServerEvent` prévoit l'événement
-  `lyrics`, mais aucun panneau n'est encore branché.
+- Les pochettes sont des dégradés génératifs ; `cover_url` est mappé mais pas
+  encore affiché.
+- L'upload présigné exige la règle CORS `PUT` du bucket R2 (voir ci-dessus).
+- Forge (base du backend) est parfois lent/instable : l'UI affiche l'erreur et
+  permet de réessayer (publication, création de playlist).
