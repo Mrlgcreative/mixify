@@ -14,6 +14,8 @@ interface HeaderProps {
   query: string;
   onQueryChange: (query: string) => void;
   onSubmitQuery: () => void;
+  /** Ouvre le profil du compte connecté (menu mobile). */
+  onOpenProfile: () => void;
 }
 
 const TITLES: Record<ViewName, string> = {
@@ -21,6 +23,7 @@ const TITLES: Record<ViewName, string> = {
   search: 'Rechercher',
   library: 'Bibliothèque',
   artist: 'Espace artiste',
+  profile: 'Profil',
 };
 
 /** Header sticky : historique de navigation + recherche. */
@@ -33,6 +36,7 @@ export function Header({
   query,
   onQueryChange,
   onSubmitQuery,
+  onOpenProfile,
 }: HeaderProps) {
   const user = useAuthStore((s) => s.user);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -104,7 +108,12 @@ export function Header({
                 className="fixed inset-0 z-20 cursor-default"
               />
               <div className="absolute right-0 top-11 z-30 w-64 rounded-panel border border-line bg-panel p-2 shadow-card">
-                <AuthPanel />
+                <AuthPanel
+                  onOpen={() => {
+                    setAccountOpen(false);
+                    onOpenProfile();
+                  }}
+                />
               </div>
             </>
           )}

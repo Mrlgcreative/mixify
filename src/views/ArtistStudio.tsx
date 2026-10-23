@@ -17,11 +17,12 @@ import {
 import { api } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
 import { TrackList } from '../components/common/TrackList';
-import { useMyArtist } from '../hooks/useMusicApi';
+import { useMyArtist, useArtistStats } from '../hooks/useMusicApi';
 import type {
   ArtistDashboard,
   ArtistInput,
   ArtistProfile,
+  ArtistStats,
   Track,
   TrackInput,
 } from '../types/music';
@@ -56,6 +57,7 @@ function safeUrl(url?: string): string | undefined {
 export function ArtistStudio() {
   const [revision, setRevision] = useState(0);
   const { data, loading, error } = useMyArtist(revision);
+  const stats = useArtistStats(revision);
   const [tab, setTab] = useState<Tab>('overview');
   const refresh = () => setRevision((value) => value + 1);
 
@@ -131,7 +133,7 @@ export function ArtistStudio() {
 
       {tab === 'overview' &&
         (data ? (
-          <Overview data={data} onTab={setTab} />
+          <Overview data={data} stats={stats.data} onTab={setTab} />
         ) : (
           empty
         ))}
@@ -169,9 +171,11 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 function Overview({
   data,
+  stats,
   onTab,
 }: {
   data: ArtistDashboard;
+  stats: ArtistStats | null;
   onTab: (tab: Tab) => void;
 }) {
   const { artist, tracks, totalDurationMs } = data;
@@ -258,6 +262,8 @@ function Overview({
         <Stat label="Abonnés" value={artist.followers} />
       </section>
 
+      {stats && <ListeningStats stats={stats} />}
+
       <section className="mt-8">
         <div className="mb-2 flex items-end justify-between gap-3">
           <div>
@@ -291,6 +297,72 @@ function Overview({
         )}
       </section>
     </div>
+  );
+}
+
+// ------------------------------------------------------- statistiques d'écoute
+
+function ListeningStats({ stats }: { stats: ArtistStats }) {
+  const max = Math.max(1, ...stats.daily.map((day) => day.plays));
+  const top = stats.tracks.filter((track) => track.plays > 0).slice(0, 5);
+
+  return (
+    <section className="mt-8">
+      <div className="mb-3">
+        <h3 className="text-lg font-bold text-white">Statistiques d'écoute</h3>
+        <p className="text-xs text-muted">
+          Écoutes du catalogue Mixify, 30 derniers jours.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Écoutes" value={stats.totals.plays} />
+        <Stat label="Auditeurs" value={stats.totals.uniqueListeners} />
+        <Stat label="Favoris" value={stats.totals.favorites} />
+        <Stat label="Temps d'écoute" value={formatDuration(stats.totals.listeningMs)} />
+      </div>
+
+      <div className="mt-3 rounded-panel bg-card p-4">
+        <div
+          role="img"
+          aria-label={`Écoutes par jour sur 30 jours, ${stats.totals.plays} au total`}
+          className="flex h-20 items-end gap-1"
+        >
+          {stats.daily.map((day) => (
+            <div
+              key={day.date}
+              title={`${day.date} · ${day.plays} écoute(s)`}
+              className="flex-1 rounded-t bg-primary/70"
+              style={{
+                height: `${Math.round((day.plays / max) * 100)}%`,
+                minHeight: day.plays > 0 ? 3 : 1,
+              }}
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted">
+          {stats.totals.tracks} morceau(x) · {stats.totals.published} publié(s) ·{" "}
+          {stats.totals.playlistAdds} ajout(s) en playlist
+        </p>
+      </div>
+
+      {top.length > 0 && (
+        <ol className="mt-3 divide-y divide-line rounded-panel bg-card">
+          {top.map((track, index) => (
+            <li key={track.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="w-4 text-xs font-bold text-muted">{index + 1}</span>
+              <span className="min-w-0 flex-1 truncate text-white">{track.title}</span>
+              <span className="hidden text-xs text-muted sm:inline">
+                {track.uniqueListeners} auditeur(s)
+              </span>
+              <span className="w-20 text-right font-semibold text-white">
+                {track.plays} écoutes
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 

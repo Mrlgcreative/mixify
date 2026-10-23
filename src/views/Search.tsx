@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 
 import { MediaCard } from '../components/common/MediaCard';
 import { TrackList } from '../components/common/TrackList';
+import { FollowButton } from '../components/Follow/FollowButton';
 import { useSearch } from '../hooks/useMusicApi';
 import { usePlayer } from '../store/playerStore';
 
@@ -77,13 +78,15 @@ export function SearchView({ query }: SearchViewProps) {
           <h2 className="mb-3 text-xl font-bold text-white">Artistes</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
             {artists.map((artist) => (
-              <MediaCard
-                key={artist.id}
-                seed={artist.id}
-                title={artist.name}
-                subtitle={artist.genres?.join(' · ')}
-                shape="circle"
-              />
+              <div key={artist.id} className="flex flex-col items-start gap-2">
+                <MediaCard
+                  seed={artist.id}
+                  title={artist.name}
+                  subtitle={artist.genres?.join(' · ')}
+                  shape="circle"
+                />
+                <FollowButton artist={artist} />
+              </div>
             ))}
           </div>
         </section>

@@ -2,9 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api/musicApi';
 import { useLibraryStore } from '../store/libraryStore';
-import type { ArtistDashboard, HomeFeed, Library, Playlist, SearchResults, Track } from '../types/music';
+import type {
+  ArtistDashboard,
+  ArtistStats,
+  HistoryEntry,
+  HomeFeed,
+  Library,
+  Playlist,
+  SearchResults,
+  Track,
+} from '../types/music';
 
-interface AsyncState<T> {
+export interface AsyncState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
@@ -81,7 +90,17 @@ export function useTracks(): AsyncState<Track[]> {
   return useAsync(() => api.getTracks(), []);
 }
 
+/** Historique d'écoute du compte (relancé via `revision`). */
+export function useHistory(revision = 0): AsyncState<HistoryEntry[]> {
+  return useAsync(() => api.getHistory(), [revision]);
+}
+
 /** Espace artiste : profil + morceaux du compte (relancé via `revision`). */
 export function useMyArtist(revision = 0): AsyncState<ArtistDashboard | null> {
   return useAsync(() => api.getMyArtist(), [revision]);
+}
+
+/** Espace artiste : statistiques d'écoute du catalogue (relancées via `revision`). */
+export function useArtistStats(revision = 0): AsyncState<ArtistStats | null> {
+  return useAsync(() => api.getArtistStats(), [revision]);
 }

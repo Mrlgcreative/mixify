@@ -92,7 +92,7 @@ export function Sidebar({ view, onNavigate, onSelectPlaylist }: SidebarProps) {
         </ul>
       </div>
 
-      <AuthPanel />
+      <AuthPanel onOpen={() => onNavigate('profile')} />
     </aside>
   );
 }

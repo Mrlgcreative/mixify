@@ -11,8 +11,10 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { Home } from './views/Home';
 import { ArtistStudio } from './views/ArtistStudio';
 import { LibraryView, PlaylistDetail } from './views/Library';
+import { Profile } from './views/Profile';
 import { SearchView } from './views/Search';
 import { useAuthStore } from './store/authStore';
+import { useFollows } from './store/followsStore';
 import { useLibraryStore } from './store/libraryStore';
 import { usePlayer } from './store/playerStore';
 import { applyTheme, getAccent, theme } from './theme/theme';
@@ -51,6 +53,8 @@ export default function App() {
   const authReady = useAuthStore((s) => s.ready);
   const initAuth = useAuthStore((s) => s.init);
   const loadFavorites = useLibraryStore((s) => s.loadFavorites);
+  const loadFollows = useFollows((s) => s.load);
+  const resetFollows = useFollows((s) => s.reset);
 
   // Applique le thème (accent persistant) au montage.
   useEffect(() => {
@@ -62,10 +66,15 @@ export default function App() {
     void initAuth();
   }, [initAuth]);
 
-  // Charge les favoris du compte (cœurs des listes de titres).
+  // Charge les favoris et abonnements du compte.
   useEffect(() => {
-    if (user) void loadFavorites();
-  }, [user, loadFavorites]);
+    if (user) {
+      void loadFavorites();
+      void loadFollows();
+    } else {
+      resetFollows();
+    }
+  }, [user, loadFavorites, loadFollows, resetFollows]);
 
   // Après une connexion, la prochaine déconnexion repart de l'écran de connexion.
   useEffect(() => {
@@ -163,6 +172,7 @@ export default function App() {
               if (value.trim() && (playlistRoute || view !== 'search')) navigate('search');
             }}
             onSubmitQuery={() => navigate('search')}
+            onOpenProfile={() => navigate('profile')}
           />
 
           <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
@@ -174,6 +184,9 @@ export default function App() {
                 {view === 'search' && <SearchView query={query} />}
                 {view === 'library' && <LibraryView onSelect={openPlaylist} />}
                 {view === 'artist' && <ArtistStudio />}
+                {view === 'profile' && (
+                  <Profile onSelectPlaylist={openPlaylist} onNavigate={navigate} />
+                )}
               </>
             )}
           </div>

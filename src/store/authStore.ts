@@ -20,6 +20,8 @@ interface AuthStore {
     artist?: ArtistSignupDetails;
   }) => Promise<void>;
   logout: () => void;
+  /** Remplace l'utilisateur courant après une mise à jour du profil. */
+  setUser: (user: AuthUser) => void;
   clearError: () => void;
 }
 
@@ -91,6 +93,10 @@ export const useAuthStore = create<AuthStore>((set) => ({
   logout() {
     setToken(null);
     set({ user: null, error: null });
+  },
+
+  setUser(user) {
+    set({ user });
   },
 
   clearError() {

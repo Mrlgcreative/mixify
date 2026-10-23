@@ -4,9 +4,13 @@ import type {
   ArtistDashboard,
   ArtistInput,
   ArtistProfile,
+  ArtistStats,
+  FollowedArtist,
+  HistoryEntry,
   HomeFeed,
   Library,
   Playlist,
+  ProfileFollows,
   SearchResults,
   Shelf,
   Track,
@@ -180,6 +184,34 @@ interface ApiFavorite {
   track: ApiTrack | null;
 }
 
+interface ApiHistoryEntry {
+  id: string;
+  titre: string;
+  artiste: string | null;
+  cover: string | null;
+  genre: string | null;
+  duration_ms: number | null;
+  played_at: string;
+  track: ApiTrack | null;
+}
+
+interface ApiFollowedArtist extends ApiArtist {
+  follow_id: string;
+}
+
+interface ApiFollower {
+  id: string;
+  name: string | null;
+  avatar_url: string | null;
+  followed_at?: string | null;
+}
+
+interface ApiFollows {
+  following: ApiFollowedArtist[];
+  followers: ApiFollower[];
+  my_artist: ApiArtist | null;
+}
+
 // ---------------------------------------------------------------- mappages
 
 function toArtist(raw: ApiArtist): Artist {
@@ -193,6 +225,7 @@ function toArtist(raw: ApiArtist): Artist {
           .map((genre) => genre.trim())
           .filter(Boolean)
       : undefined,
+    followers: raw.followers_count ?? undefined,
   };
 }
 
@@ -258,6 +291,39 @@ function toLikedTrack(raw: ApiFavorite): Track {
   };
 }
 
+/** Ligne d'historique : le morceau du catalogue prime sur les métadonnées en cache. */
+function toHistoryEntry(raw: ApiHistoryEntry): HistoryEntry {
+  return {
+    id: raw.id,
+    title: raw.track?.title ?? raw.titre,
+    artist: raw.track?.artiste ?? raw.artiste ?? 'Artiste inconnu',
+    coverUrl: raw.track?.cover_url ?? raw.cover ?? undefined,
+    genre: raw.track?.genre ?? raw.genre ?? undefined,
+    durationMs: raw.track?.duration_ms ?? raw.duration_ms ?? 0,
+    playedAt: raw.played_at,
+    track: raw.track ? toTrack(raw.track) : undefined,
+  };
+}
+
+function toProfileFollows(raw: ApiFollows): ProfileFollows {
+  const following: FollowedArtist[] = raw.following.map((artist) => ({
+    ...toArtist(artist),
+    followId: artist.follow_id,
+    followers: artist.followers_count ?? 0,
+  }));
+
+  return {
+    following,
+    followers: raw.followers.map((account) => ({
+      id: account.id,
+      name: account.name ?? 'Auditeur',
+      avatarUrl: account.avatar_url ?? undefined,
+      followedAt: account.followed_at ?? undefined,
+    })),
+    myArtist: raw.my_artist ? toArtistProfile(raw.my_artist) : null,
+  };
+}
+
 // ------------------------------------------------------------------- client
 
 export interface MusicApi {
@@ -267,6 +333,21 @@ export interface MusicApi {
   getLibrary(): Promise<Library>;
   getStreamUrl(track: Track): Promise<string>;
   getTracks(): Promise<Track[]>;
+  /** Historique d'écoute du compte (200 dernières écoutes). */
+  getHistory(): Promise<HistoryEntry[]>;
+  /** Enregistre une écoute ; silencieux si le backend est injoignable. */
+  recordHistory(track: Track): Promise<void>;
+  clearHistory(): Promise<void>;
+  /** Abonnements et abonnés du compte. */
+  getFollows(): Promise<ProfileFollows>;
+  followArtist(artistId: string): Promise<void>;
+  unfollowArtist(artistId: string): Promise<void>;
+  /** Met à jour le profil public (nom, bio, avatar). */
+  updateProfile(input: {
+    name?: string;
+    bio?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<AuthUser>;
   /** Favoris de l'utilisateur : `track_id` -> identifiant du favori. */
   getFavoriteIds(): Promise<Record<string, string>>;
   addFavorite(trackId: string): Promise<string>;
@@ -285,6 +366,8 @@ export interface MusicApi {
   ): Promise<Track>;
   /** Profil artiste + catalogue du compte connecté (null s'il n'y a pas encore de profil). */
   getMyArtist(): Promise<ArtistDashboard | null>;
+  /** Vue d'ensemble des écoutes du catalogue (null s'il n'y a pas encore de profil). */
+  getArtistStats(): Promise<ArtistStats | null>;
   createArtist(input: ArtistInput): Promise<ArtistProfile>;
   updateArtist(id: string, input: ArtistInput): Promise<ArtistProfile>;
   updateTrack(id: string, input: TrackInput): Promise<void>;
@@ -435,6 +518,75 @@ class MixifyApi implements MusicApi {
     return tracks.map(toTrack);
   }
 
+  async getHistory(): Promise<HistoryEntry[]> {
+    if (!getToken()) return [];
+    const { history } = await request<{ history: ApiHistoryEntry[] }>('/api/history');
+    return (history ?? []).map(toHistoryEntry);
+  }
+
+  async recordHistory(track: Track): Promise<void> {
+    if (!getToken()) return;
+    // Les morceaux du catalogue ont un id UUID ; les ids externes (Jamendo…)
+    // sont conservés dans external_id pour ne pas casser la clé étrangère.
+    const isCatalogId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      track.id,
+    );
+    try {
+      await request('/api/history', {
+        method: 'POST',
+        body: JSON.stringify({
+          track_id: isCatalogId ? track.id : null,
+          external_id: isCatalogId ? null : track.id,
+          titre: track.title,
+          artiste: track.artist.name,
+          cover: track.album?.coverUrl ?? null,
+          genre: track.genre ?? null,
+          duration_ms: Math.round(track.duration * 1000),
+        }),
+      });
+    } catch {
+      /* l'historique ne doit jamais bloquer la lecture */
+    }
+  }
+
+  async clearHistory(): Promise<void> {
+    await request('/api/history', { method: 'DELETE' });
+  }
+
+  async getFollows(): Promise<ProfileFollows> {
+    if (!getToken()) return { following: [], followers: [], myArtist: null };
+    return toProfileFollows(await request<ApiFollows>('/api/follows'));
+  }
+
+  async followArtist(artistId: string): Promise<void> {
+    await request('/api/follows', {
+      method: 'POST',
+      body: JSON.stringify({ artist_id: artistId }),
+    });
+  }
+
+  async unfollowArtist(artistId: string): Promise<void> {
+    await request(`/api/follows?artist_id=${encodeURIComponent(artistId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateProfile(input: {
+    name?: string;
+    bio?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<AuthUser> {
+    const { user } = await request<{ user: AuthUser }>('/api/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.bio !== undefined ? { bio: input.bio } : {}),
+        ...(input.avatarUrl !== undefined ? { avatar_url: input.avatarUrl } : {}),
+      }),
+    });
+    return user;
+  }
+
   async getMyArtist(): Promise<ArtistDashboard | null> {
     if (!getToken()) return null;
     try {
@@ -463,6 +615,20 @@ class MixifyApi implements MusicApi {
       };
     } catch (error) {
       // Pas encore de profil : l'espace artiste propose de le créer
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async getArtistStats(): Promise<ArtistStats | null> {
+    if (!getToken()) return null;
+    try {
+      const { stats } = await request<{ stats: ArtistStats }>(
+        '/api/artists/me/stats',
+      );
+      return stats;
+    } catch (error) {
+      // Pas encore de profil : la vue d'ensemble n'affiche rien de plus
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;
     }

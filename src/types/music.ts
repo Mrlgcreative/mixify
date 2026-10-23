@@ -32,6 +32,32 @@ export interface ArtistDashboard {
   totalDurationMs: number;
 }
 
+/** Statistiques d'écoute d'un artiste (miroir de `GET /api/artists/me/stats`). */
+export interface ArtistStats {
+  followers: number;
+  totals: {
+    tracks: number;
+    published: number;
+    plays: number;
+    uniqueListeners: number;
+    favorites: number;
+    playlistAdds: number;
+    listeningMs: number;
+  };
+  /** 30 jours UTC glissants, du plus ancien au plus récent. */
+  daily: Array<{ date: string; plays: number }>;
+  tracks: Array<{
+    id: string;
+    title: string;
+    status: string | null;
+    plays: number;
+    uniqueListeners: number;
+    favorites: number;
+    playlistAdds: number;
+    lastPlayedAt: string | null;
+  }>;
+}
+
 /** Champs modifiables du profil artiste. */
 export interface ArtistInput {
   name: string;
@@ -120,10 +146,45 @@ export interface Library {
   liked: Track[];
 }
 
+/** Entrée de l'historique d'écoute (module profil). */
+export interface HistoryEntry {
+  id: string;
+  title: string;
+  artist: string;
+  coverUrl?: string;
+  genre?: string;
+  durationMs: number;
+  playedAt: string;
+  /** Morceau du catalogue (absent pour un morceau externe). */
+  track?: Track;
+}
+
+/** Compte qui suit le profil artiste de l'utilisateur. */
+export interface Follower {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  followedAt?: string;
+}
+
+/** Artiste suivi par l'utilisateur. */
+export interface FollowedArtist extends Artist {
+  followId: string;
+  followers: number;
+}
+
+/** Abonnements et abonnés du compte connecté. */
+export interface ProfileFollows {
+  following: FollowedArtist[];
+  followers: Follower[];
+  /** Profil artiste du compte, s'il existe. */
+  myArtist: ArtistProfile | null;
+}
+
 export type RepeatMode = 'off' | 'all' | 'one';
 
 /** Vue de l'application (pas de router : navigation locale pilotée par l'état). */
-export type ViewName = 'home' | 'search' | 'library' | 'artist';
+export type ViewName = 'home' | 'search' | 'library' | 'artist' | 'profile';
 /** État du lecteur — miroir du store Zustand. */
 export interface PlayerState {
   queue: Track[];

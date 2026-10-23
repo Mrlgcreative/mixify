@@ -117,6 +117,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       const url = await api.getStreamUrl(track);
       await engine.play(track, url, startAt);
       set({ isPlaying: true, currentTrack: track, position: startAt, duration: track.duration });
+      void api.recordHistory(track);
       void prepareNext();
     } catch (error) {
       set({
@@ -147,6 +148,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
         position: 0,
         duration: queue[pendingIndex].duration,
       });
+      void api.recordHistory(queue[pendingIndex]);
       void prepareNext();
     },
     onError: (message) => set({ notice: message }),

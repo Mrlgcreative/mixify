@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test src/audio/*.test.ts"
+    "test": "node --test src/audio/*.test.ts src/utils/*.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.462.0",
