@@ -28,6 +28,8 @@ html,
 body,
 #root {
   height: 100%;
+  /* iOS : suit la barre d'URL rétractable pour garder la nav accessible. */
+  height: 100dvh;
 }
 
 body {

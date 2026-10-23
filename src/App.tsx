@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { Onboarding } from './components/Onboarding/Onboarding';
 import { Header } from './components/Header/Header';
+import { MobileNav } from './components/MobileNav/MobileNav';
 import { Player } from './components/Player/Player';
 import { QueuePanel } from './components/Queue/QueuePanel';
 import { Sidebar } from './components/Sidebar/Sidebar';
@@ -142,14 +143,14 @@ export default function App() {
     // La clé remonte les vues après connexion/déconnexion : les données
     // dépendant du compte (bibliothèque, playlists) sont rechargées.
     <div key={user?.id ?? 'invite'} className="bg-grid flex h-full flex-col overflow-hidden bg-bg text-text">
-      <div className="flex min-h-0 flex-1 gap-2 overflow-hidden p-2">
+      <div className="flex min-h-0 flex-1 gap-0 overflow-hidden p-0 md:gap-2 md:p-2">
         <Sidebar
           view={playlistRoute ? 'library' : view}
           onNavigate={navigate}
           onSelectPlaylist={openPlaylist}
         />
 
-        <main className="bg-grid flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel bg-panel">
+        <main className="bg-grid flex min-w-0 flex-1 flex-col overflow-hidden bg-panel md:rounded-panel">
           <Header
             view={playlistRoute ? 'library' : view}
             canGoBack={playlistRoute ? true : nav.cursor > 0}
@@ -182,6 +183,7 @@ export default function App() {
       </div>
 
       <Player />
+      <MobileNav view={playlistRoute ? 'library' : view} onNavigate={navigate} />
     </div>
   );
 }

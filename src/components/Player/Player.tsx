@@ -34,16 +34,16 @@ export function Player() {
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
   return (
-    <footer className="relative flex h-[88px] shrink-0 items-center gap-4 border-t border-line bg-panel px-4">
+    <footer className="relative flex h-[76px] shrink-0 items-center gap-2 border-t border-line bg-panel px-3 md:h-[88px] md:gap-4 md:px-4">
       {/* Pochette + métadonnées */}
       <div className="flex min-w-0 flex-1 items-center gap-3 md:w-[28%] md:flex-none">
         <Cover
           seed={currentTrack?.id ?? 'mixify'}
           title={currentTrack?.title ?? 'Mixify'}
-          className="h-14 w-14 shrink-0"
+          className="h-12 w-12 shrink-0 md:h-14 md:w-14"
         />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">
+          <p className="truncate text-[13px] font-semibold text-white md:text-sm">
             {currentTrack?.title ?? 'Aucun titre'}
           </p>
           <p className="truncate text-xs text-muted">{currentTrack?.artist.name ?? 'Mixify'}</p>
@@ -52,13 +52,13 @@ export function Player() {
 
       {/* Transport + progression */}
       <div className="flex flex-[2] flex-col items-center gap-1">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <button
             type="button"
             onClick={toggleShuffle}
             aria-pressed={shuffle}
             aria-label="Mode aléatoire"
-            className={`transition ${shuffle ? 'text-primary' : 'text-muted hover:text-white'}`}
+            className={`hidden transition sm:block ${shuffle ? 'text-primary' : 'text-muted hover:text-white'}`}
           >
             <Shuffle size={16} />
           </button>
@@ -90,20 +90,31 @@ export function Player() {
             type="button"
             onClick={cycleRepeat}
             aria-label={`Répétition : ${repeat}`}
-            className={`relative transition ${repeat === 'off' ? 'text-muted hover:text-white' : 'text-primary'}`}
+            className={`relative hidden transition sm:block ${repeat === 'off' ? 'text-muted hover:text-white' : 'text-primary'}`}
           >
             <RepeatIcon size={16} />
           </button>
         </div>
 
         <div className="flex w-full max-w-2xl items-center gap-2">
-          <span className="w-10 text-right text-[11px] tabular-nums text-muted">
+          <span className="hidden w-10 text-right text-[11px] tabular-nums text-muted sm:block">
             {formatTime(position)}
           </span>
           <ProgressBar value={position} max={duration} onChange={seek} label="Progression" className="flex-1" />
-          <span className="w-10 text-[11px] tabular-nums text-muted">{formatTime(duration)}</span>
+          <span className="hidden w-10 text-[11px] tabular-nums text-muted sm:block">{formatTime(duration)}</span>
         </div>
       </div>
+
+      {/* File d'attente sur mobile */}
+      <button
+        type="button"
+        onClick={toggleQueue}
+        aria-pressed={queueOpen}
+        aria-label="File d'attente"
+        className={`shrink-0 transition md:hidden ${queueOpen ? 'text-primary' : 'text-muted hover:text-white'}`}
+      >
+        <ListMusic size={18} />
+      </button>
 
       {/* Auto-Mix, analyseur, volume, file d'attente */}
       <div className="hidden flex-1 items-center justify-end gap-4 md:flex">

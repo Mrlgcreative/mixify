@@ -2,6 +2,7 @@ import { Settings2, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { CrossfadeSettings } from '../AutoMix/CrossfadeSettings';
+import { AutoMixToggle } from '../AutoMix/AutoMixToggle';
 import { TrackList } from '../common/TrackList';
 import { usePlayer } from '../../store/playerStore';
 import { accentPresets, getAccent, setAccent } from '../../theme/theme';
@@ -17,7 +18,7 @@ export function QueuePanel() {
   const [accent, setAccentState] = useState(getAccent());
 
   return (
-    <aside className="hidden w-[320px] shrink-0 flex-col overflow-hidden rounded-panel bg-panel lg:flex">
+    <aside className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-panel pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:w-[320px] lg:shrink-0 lg:rounded-panel lg:pb-0">
       <header className="flex items-center gap-1 border-b border-line px-3 py-2">
         <button
           type="button"
@@ -75,6 +76,10 @@ export function QueuePanel() {
         </div>
       ) : (
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          <div className="border-b border-line px-4 py-4 lg:hidden">
+            <AutoMixToggle />
+          </div>
+
           <CrossfadeSettings />
 
           <div className="border-t border-line px-4 py-4">

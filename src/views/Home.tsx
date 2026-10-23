@@ -142,7 +142,7 @@ export function Home() {
       )}
 
       {/* Bannière du mix du jour */}
-      <section className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/35 via-elevated to-panel p-8">
+      <section className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/35 via-elevated to-panel p-5 md:p-8">
         <div className="relative flex flex-wrap items-center gap-6">
           <Cover
             seed={hero?.id ?? 'mixify'}
@@ -154,7 +154,7 @@ export function Home() {
             <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
               {greeting} · mix du jour
             </p>
-            <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+            <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-4xl">
               Ton mix du jour est prêt
             </h2>
             <p className="mt-2 max-w-md text-sm text-white/70">

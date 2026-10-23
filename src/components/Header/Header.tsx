@@ -1,5 +1,8 @@
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronLeft, ChevronRight, Search, UserRound } from 'lucide-react';
 
+import { AuthPanel } from '../Auth/AuthPanel';
+import { useAuthStore } from '../../store/authStore';
 import type { ViewName } from '../../types/music';
 
 interface HeaderProps {
@@ -31,8 +34,11 @@ export function Header({
   onQueryChange,
   onSubmitQuery,
 }: HeaderProps) {
+  const user = useAuthStore((s) => s.user);
+  const [accountOpen, setAccountOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-4 bg-panel/95 px-4 py-3 backdrop-blur md:px-6">
+    <header className="sticky top-0 z-20 flex items-center gap-3 bg-panel/95 px-3 py-3 backdrop-blur md:gap-4 md:px-6">
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -73,10 +79,37 @@ export function Header({
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Rechercher un titre, un artiste…"
             aria-label="Rechercher"
-            className="w-44 rounded-full border border-line bg-elevated py-2 pl-9 pr-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none sm:w-64"
+            className="w-40 rounded-full border border-line bg-elevated py-2 pl-9 pr-4 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none sm:w-64"
           />
         </div>
       </form>
+
+      {user && (
+        <div className="relative md:hidden">
+          <button
+            type="button"
+            onClick={() => setAccountOpen((open) => !open)}
+            aria-expanded={accountOpen}
+            aria-label="Mon compte"
+            className="rounded-full bg-black/40 p-2 text-muted transition hover:text-white"
+          >
+            <UserRound size={18} />
+          </button>
+          {accountOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Fermer le menu"
+                onClick={() => setAccountOpen(false)}
+                className="fixed inset-0 z-20 cursor-default"
+              />
+              <div className="absolute right-0 top-11 z-30 w-64 rounded-panel border border-line bg-panel p-2 shadow-card">
+                <AuthPanel />
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </header>
   );
 }
