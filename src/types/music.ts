@@ -21,7 +21,7 @@ export interface ArtistProfile extends Artist {
   country?: string;
   websiteUrl?: string;
   socialLinks?: string;
-  verified: boolean;
+  verified?: boolean;
   followers: number;
 }
 

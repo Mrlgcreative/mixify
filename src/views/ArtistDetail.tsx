@@ -102,7 +102,7 @@ export function ArtistDetail({ artistId, onBack }: ArtistDetailProps) {
           <p className="text-xs uppercase tracking-wider text-muted">Artiste</p>
           <div className="mt-2 flex items-center gap-2">
             <h1 className="text-4xl font-extrabold tracking-tight text-white">{artist.name}</h1>
-            {artist.verified && <BadgeCheck size={28} className="text-primary" />}
+            {(artist as any).verified && <BadgeCheck size={28} className="text-primary" />}
           </div>
           <p className="mt-2 text-sm text-muted">{tracks.length} titre{tracks.length > 1 ? 's' : ''}</p>
           <button
