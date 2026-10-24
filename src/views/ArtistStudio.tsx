@@ -13,6 +13,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
+import { ImageUpload } from '../components/common/ImageUpload';
 
 import { api } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
@@ -776,25 +777,28 @@ function ProfileForm({
           </label>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className={labelClass}>
-            Photo (URL)
-            <input
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <p className="mb-2 text-sm font-medium text-white">Photo de profil</p>
+            <ImageUpload
               value={input.imageUrl}
-              onChange={set('imageUrl')}
-              placeholder="https://…/photo.jpg"
-              className={inputClass}
+              onChange={(url) => setInput((prev) => ({ ...prev, imageUrl: url }))}
+              folder="avatars"
+              shape="circle"
+              size={96}
             />
-          </label>
-          <label className={labelClass}>
-            Bannière (URL)
-            <input
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-medium text-white">Bannière</p>
+            <ImageUpload
               value={input.bannerUrl}
-              onChange={set('bannerUrl')}
-              placeholder="https://…/banner.jpg"
-              className={inputClass}
+              onChange={(url) => setInput((prev) => ({ ...prev, bannerUrl: url }))}
+              folder="banners"
+              shape="square"
+              size={160}
+              className="w-full max-w-[320px]"
             />
-          </label>
+          </div>
         </div>
 
         <label className={labelClass}>

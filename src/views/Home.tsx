@@ -70,6 +70,7 @@ function ShelfRow({ shelf, onOpenAlbum, onOpenArtist }: ShelfProps & HomeProps) 
               subtitle={item.genres?.join(' · ')}
               shape="circle"
               onSelect={onOpenArtist ? () => onOpenArtist(item.id) : undefined}
+              imageUrl={item.imageUrl}
             />
           );
         }

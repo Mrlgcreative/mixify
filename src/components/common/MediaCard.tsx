@@ -10,6 +10,7 @@ interface MediaCardProps {
   onPlay?: () => void;
   onSelect?: () => void;
   playing?: boolean;
+  imageUrl?: string;
 }
 
 /** Carte d'album / playlist / artiste (grille ou carrousel). */
@@ -21,6 +22,7 @@ export function MediaCard({
   onPlay,
   onSelect,
   playing = false,
+  imageUrl,
 }: MediaCardProps) {
   return (
     <div
@@ -43,6 +45,7 @@ export function MediaCard({
           title={title}
           rounded={shape === 'circle' ? 'full' : 'card'}
           className={shape === 'circle' ? 'h-[180px] w-[180px]' : 'aspect-square w-full'}
+          imageUrl={imageUrl}
         />
         {onPlay && (
           <button

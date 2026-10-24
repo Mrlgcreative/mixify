@@ -361,6 +361,8 @@ export interface MusicApi {
   removeTrackFromPlaylist(playlistTrackId: string): Promise<void>;
   /** Ordre et transitions d'un mix IA (rejette si l'appel échoue : la lecture continue en local). */
   getMixPlan(trackIds: string[]): Promise<MixPlan>;
+  /** Téléverse une image (avatar / pochette / bannière) vers R2. */
+  uploadImage(file: File, folder?: string): Promise<string>;
   /** Téléverse le fichier vers R2 puis publie le morceau au catalogue. */
   uploadTrack(
     file: File,
@@ -759,6 +761,22 @@ class MixifyApi implements MusicApi {
     });
 
     return { order: mix.map((item) => item.id), transitions };
+  }
+
+  async uploadImage(file: File, folder = 'images'): Promise<string> {
+    const contentType = file.type || 'application/octet-stream';
+    const { uploadUrl, publicUrl, headers } = await request<{
+      uploadUrl: string;
+      publicUrl: string;
+      key: string;
+      headers?: Record<string, string>;
+    }>('/api/upload/image', {
+      method: 'POST',
+      body: JSON.stringify({ filename: file.name, contentType, folder }),
+    });
+
+    await putFile(uploadUrl, file, headers ?? { 'Content-Type': contentType });
+    return publicUrl;
   }
 
   async uploadTrack(
