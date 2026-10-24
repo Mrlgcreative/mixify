@@ -37,11 +37,16 @@ export const useFollows = create<FollowsStore>((set, get) => ({
   },
 
   async toggle(artist) {
-    const following = get().following.some((item) => item.id === artist.id);
-    set({ busyId: artist.id, error: null });
+    const artistId = artist?.id;
+    if (!artistId || artistId === 'inconnu' || artistId.trim() === '') {
+      set({ error: "Impossible de suivre cet artiste", busyId: null });
+      return;
+    }
+    const following = get().following.some((item) => item.id === artistId);
+    set({ busyId: artistId, error: null });
     try {
-      if (following) await api.unfollowArtist(artist.id);
-      else await api.followArtist(artist.id);
+      if (following) await api.unfollowArtist(artistId);
+      else await api.followArtist(artistId);
       await get().load();
     } catch (error) {
       set({

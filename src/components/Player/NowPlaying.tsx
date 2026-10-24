@@ -30,7 +30,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const following = useFollows((s) => s.following);
   const toggleFollow = useFollows((s) => s.toggle);
   const artistId = currentTrack?.artist?.id;
-  const isFollow = artistId ? following.some((f) => f.id === artistId) : false;
+  const canFollow = Boolean(artistId && artistId !== 'inconnu' && artistId.trim() !== '');
+  const isFollow = canFollow ? following.some((f) => f.id === artistId) : false;
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -90,7 +91,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <p className="mt-1 truncate text-base text-white/60">{currentTrack.artist.name}</p>
             </div>
             <div className="flex items-center gap-2">
-              {artistId && (
+              {canFollow && (
                 <button
                   type="button"
                   onClick={() => toggleFollow(currentTrack.artist)}
