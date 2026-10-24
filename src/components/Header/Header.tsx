@@ -86,7 +86,7 @@ export function Header({
       <h1 className="hidden text-base font-semibold text-white lg:block">{TITLES[view]}</h1>
 
       <form
-        className="relative ml-auto flex items-center gap-2"
+        className="relative ml-auto flex flex-1 items-center justify-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           setFocused(false);
@@ -106,7 +106,7 @@ export function Header({
             onBlur={() => setTimeout(() => setFocused(false), 150)}
             placeholder="Rechercher un titre, un artiste…"
             aria-label="Rechercher"
-            className="w-40 rounded-full border border-line bg-elevated py-2 pl-9 pr-9 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none sm:w-72"
+            className="w-full rounded-full border border-line bg-elevated py-2 pl-9 pr-9 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none sm:w-[420px] lg:w-[520px] xl:w-[640px]"
           />
           {query && (
             <button
