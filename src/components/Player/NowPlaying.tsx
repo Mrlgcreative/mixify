@@ -1,4 +1,4 @@
-import { ChevronDown, Heart, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronDown, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
 import { usePlayer } from '../../store/playerStore';
@@ -94,12 +94,13 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
                 type="button"
                 onClick={() => artistId && toggleFollow({ id: artistId, name: currentTrack.artist.name })}
                 aria-pressed={isFollow}
-                aria-label={isFollow ? `Ne plus suivre ${currentTrack.artist.name}` : `Suivre ${currentTrack.artist.name}`}
-                className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                  isFollow ? 'bg-primary/20 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  isFollow
+                    ? 'border border-white/30 text-white/80 hover:border-white/50'
+                    : 'bg-white text-black hover:bg-white/90'
                 }`}
               >
-                <Heart size={20} fill={isFollow ? 'currentColor' : 'none'} />
+                {isFollow ? 'Abonné' : "S'abonner"}
               </button>
               <button
                 type="button"
