@@ -3,8 +3,9 @@ import { Loader2, Play } from 'lucide-react';
 import { Carousel } from '../components/common/Carousel';
 import { Cover } from '../components/common/Cover';
 import { MediaCard } from '../components/common/MediaCard';
-import { useHomeFeed } from '../hooks/useMusicApi';
+import { useHistory, useHomeFeed } from '../hooks/useMusicApi';
 import { usePlayer } from '../store/playerStore';
+import { useAuthStore } from '../store/authStore';
 import { isAlbum, isArtist, isPlaylist, isTrack } from '../utils/guards';
 import type { Shelf, Track } from '../types/music';
 
@@ -103,6 +104,8 @@ function Shortcut({ track, queue }: { track: Track; queue: Track[] }) {
 
 export function Home() {
   const { data, loading, error } = useHomeFeed();
+  const user = useAuthStore((s) => s.user);
+  const history = useHistory(user ? 0 : -1);
   const greeting = data?.greeting ?? '';
   const playTrack = usePlayer((s) => s.playTrack);
 
@@ -124,7 +127,16 @@ export function Home() {
 
   // Raccourcis : les six premiers titres du catalogue publié.
   const catalog = data.shelves.find((shelf) => shelf.id === 'nouveautes')?.items ?? [];
-  const shortcuts = catalog.filter(isTrack).slice(0, 6);
+  const catalogTracks = catalog.filter(isTrack);
+  const historyCounts = new Map<string, number>();
+  for (const entry of history.data ?? []) {
+    const key = entry.track?.id ?? entry.title;
+    if (!key) continue;
+    historyCounts.set(key, (historyCounts.get(key) ?? 0) + 1);
+  }
+  const shortcuts = [...catalogTracks]
+    .sort((a, b) => (historyCounts.get(b.id) ?? 0) - (historyCounts.get(a.id) ?? 0))
+    .slice(0, 6);
   const otherShelves = data.shelves.filter((shelf) => shelf !== firstShelf);
 
   return (
