@@ -1,4 +1,4 @@
-import { ChevronDown, FileText, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
+import { ChevronDown, FileText, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Cover } from '../common/Cover';
@@ -76,6 +76,25 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     }
   };
 
+  const handleShare = async () => {
+    if (!currentTrack) return;
+    const url = `${window.location.origin}/track/${currentTrack.id}`;
+    const text = `${currentTrack.title} • ${currentTrack.artist.name} sur Mixify`;
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title: currentTrack.title, text, url });
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        alert('Lien copié dans le presse-papiers');
+      }
+    } catch {
+      // Ignoré si l'utilisateur annule le partage
+    }
+  };
+
   const openLyricsSheet = () => {
     setShowLyricsSheet(true);
     void fetchLyrics();
@@ -147,6 +166,14 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
                   {isFollow ? 'Abonné' : "S'abonner"}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => void handleShare()}
+                aria-label="Partager le titre"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/60 transition hover:bg-white/5 hover:text-white"
+              >
+                <Share2 size={20} />
+              </button>
               <button
                 type="button"
                 onClick={toggleQueue}
