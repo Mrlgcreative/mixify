@@ -83,7 +83,12 @@ export function TrackList({
                 />
               )}
               <div className="relative">
-                <Cover seed={track.id} title={track.title} className="h-11 w-11" />
+                <Cover
+                  seed={track.id}
+                  title={track.title}
+                  className="h-11 w-11"
+                  imageUrl={track.album?.coverUrl}
+                />
                 <button
                   type="button"
                   aria-label={isCurrent && isPlaying ? 'Pause' : `Lire ${track.title}`}

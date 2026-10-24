@@ -35,16 +35,16 @@ export function MediaCard({
           onSelect();
         }
       }}
-      className={`group relative w-[180px] shrink-0 rounded-card bg-card p-3 transition hover:bg-elevated ${
-        onSelect ? 'cursor-pointer' : ''
-      }`}
+      className={`group relative shrink-0 rounded-card bg-card transition hover:bg-elevated ${
+        shape === 'circle' ? 'w-[160px] p-2' : 'w-[180px] p-3'
+      } ${onSelect ? 'cursor-pointer' : ''}`}
     >
-      <div className="relative">
+      <div className="relative flex justify-center">
         <Cover
           seed={seed}
           title={title}
           rounded={shape === 'circle' ? 'full' : 'card'}
-          className={shape === 'circle' ? 'h-[180px] w-[180px]' : 'aspect-square w-full'}
+          className={shape === 'circle' ? 'h-[144px] w-[144px]' : 'aspect-square w-full'}
           imageUrl={imageUrl}
         />
         {onPlay && (
@@ -61,8 +61,10 @@ export function MediaCard({
           </button>
         )}
       </div>
-      <p className="mt-3 truncate text-sm font-semibold text-white">{title}</p>
-      {subtitle && <p className="truncate text-xs text-muted">{subtitle}</p>}
+      <div className={shape === 'circle' ? 'mt-2 text-center' : 'mt-3'}>
+        <p className="truncate text-sm font-semibold text-white">{title}</p>
+        {subtitle && <p className="truncate text-xs text-muted">{subtitle}</p>}
+      </div>
     </div>
   );
 }
