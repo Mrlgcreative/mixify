@@ -5,6 +5,60 @@ import { engine } from '../audio/engine';
 import { MAX_CROSSFADE_SECONDS, MIN_CROSSFADE_SECONDS } from '../audio/crossfade';
 import type { MixPlan, PlayerState, RepeatMode, Track } from '../types/music';
 
+const mediaSession = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
+let wakeLock: WakeLockSentinel | null = null;
+
+function setMediaMetadata(track: Track | null): void {
+  if (!mediaSession) return;
+  if (!track) {
+    mediaSession.metadata = null;
+    return;
+  }
+  try {
+    mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artist?.name || undefined,
+      album: track.album?.title || undefined,
+      artwork: track.album?.coverUrl
+        ? [{ src: track.album.coverUrl, sizes: '512x512', type: 'image/png' }]
+        : undefined,
+    });
+  } catch {
+    /* API non supportée */
+  }
+}
+
+function setMediaPlaybackState(state: 'playing' | 'paused' | 'none'): void {
+  if (!mediaSession) return;
+  try {
+    mediaSession.playbackState = state;
+  } catch {
+    /* ignore */
+  }
+}
+
+async function requestWakeLock(): Promise<void> {
+  if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+  try {
+    wakeLock?.release();
+    wakeLock = await (navigator as Navigator & { wakeLock: WakeLock }).wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+    });
+  } catch {
+    /* refusé ou non supporté */
+  }
+}
+
+async function releaseWakeLock(): Promise<void> {
+  try {
+    await wakeLock?.release();
+  } catch {
+    /* ignore */
+  }
+  wakeLock = null;
+}
+
 /**
  * Store global du lecteur.
  *
@@ -163,18 +217,54 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       // Le fondu s'est terminé : le deck entrant devient le titre courant.
       const { queue, pendingIndex } = get();
       if (pendingIndex === null || !queue[pendingIndex]) return;
+      const nextTrack = queue[pendingIndex];
       set({
         currentIndex: pendingIndex,
-        currentTrack: queue[pendingIndex],
+        currentTrack: nextTrack,
         isPlaying: true,
         position: 0,
-        duration: queue[pendingIndex].duration,
+        duration: nextTrack.duration,
       });
-      void api.recordHistory(queue[pendingIndex]);
+      setMediaMetadata(nextTrack);
+      setMediaPlaybackState('playing');
+      void api.recordHistory(nextTrack);
       void prepareNext();
     },
     onError: (message) => set({ notice: message }),
   });
+
+  if (mediaSession) {
+    try {
+      mediaSession.setActionHandler('play', () => {
+        void get().toggle();
+      });
+      mediaSession.setActionHandler('pause', () => {
+        void get().toggle();
+      });
+      mediaSession.setActionHandler('previoustrack', () => {
+        void get().previous();
+      });
+      mediaSession.setActionHandler('nexttrack', () => {
+        void get().next();
+      });
+      mediaSession.setActionHandler('seekto', (details) => {
+        if (typeof details.seekTime === 'number') {
+          get().seek(details.seekTime);
+        }
+      });
+    } catch {
+      /* handlers non supportés */
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        const { isPlaying } = get();
+        if (isPlaying) void requestWakeLock();
+      }
+    });
+  }
 
   engine.setVolume(initialSettings.volume);
   engine.setAutoMix(initialSettings.autoMix, initialSettings.crossfadeSeconds);
@@ -218,6 +308,9 @@ export const usePlayer = create<PlayerStore>((set, get) => {
     set({ queue, currentIndex: index, currentTrack: track });
     await engine.play(track, await api.getStreamUrl(track), 0);
     set({ isPlaying: true, position: 0, duration: track.duration });
+    setMediaMetadata(track);
+    setMediaPlaybackState('playing');
+    void requestWakeLock();
     void api.recordHistory(track);
     set({ mixPlan: null, mixPlanKey: null });
     void fetchMixPlan(queue, set, get);
@@ -230,9 +323,13 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       if (isPlaying) {
         engine.pause();
         set({ isPlaying: false });
+        setMediaPlaybackState('paused');
+        void releaseWakeLock();
       } else {
         await engine.resume();
         set({ isPlaying: true });
+        setMediaPlaybackState('playing');
+        void requestWakeLock();
       }
     },
 
@@ -244,6 +341,8 @@ export const usePlayer = create<PlayerStore>((set, get) => {
         engine.seek(0);
         await engine.resume();
         set({ position: 0, isPlaying: true });
+        setMediaPlaybackState('playing');
+        void requestWakeLock();
         return;
       }
 
@@ -251,12 +350,17 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       if (nextIndex === null) {
         engine.pause();
         set({ isPlaying: false, position: 0 });
+        setMediaPlaybackState('paused');
+        void releaseWakeLock();
         return;
       }
       const track = queue[nextIndex];
       set({ currentIndex: nextIndex, currentTrack: track });
       await engine.play(track, await api.getStreamUrl(track), 0);
       set({ isPlaying: true, position: 0, duration: track.duration });
+      setMediaMetadata(track);
+      setMediaPlaybackState('playing');
+      void requestWakeLock();
       void api.recordHistory(track);
       void prepareNext();
     },
@@ -275,6 +379,9 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       set({ currentIndex: previousIndex, currentTrack: track });
       await engine.play(track, await api.getStreamUrl(track), 0);
       set({ isPlaying: true, position: 0, duration: track.duration });
+      setMediaMetadata(track);
+      setMediaPlaybackState('playing');
+      void requestWakeLock();
       void api.recordHistory(track);
       void prepareNext();
     },
@@ -364,6 +471,11 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       const remaining = currentTrack ? queue.filter((t) => t.id === currentTrack.id) : [];
       set({ queue: remaining, currentIndex: remaining.length > 0 ? 0 : -1, mixPlan: null, mixPlanKey: null });
       void prepareNext();
+      if (!currentTrack) {
+        setMediaMetadata(null);
+        setMediaPlaybackState('none');
+        void releaseWakeLock();
+      }
     },
 
     addToQueue(track) {
