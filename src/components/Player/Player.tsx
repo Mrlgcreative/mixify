@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { ListMusic, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
 import { AutoMixToggle } from '../AutoMix/AutoMixToggle';
 import { ProgressBar } from './ProgressBar';
 import { Spectrum } from './Spectrum';
+import { NowPlaying } from './NowPlaying';
 import { usePlayer } from '../../store/playerStore';
 import { formatTime } from '../../utils/format';
 
@@ -32,23 +34,30 @@ export function Player() {
   const clearNotice = usePlayer((s) => s.clearNotice);
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
+  const [fullPlayerOpen, setFullPlayerOpen] = useState(false);
 
   return (
-    <footer className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] left-0 right-0 z-30 flex h-[72px] shrink-0 items-center gap-2 border-t border-line bg-panel/95 px-3 backdrop-blur-xl md:relative md:bottom-auto md:z-auto md:h-[88px] md:gap-4 md:px-4 md:bg-panel md:backdrop-blur-none">
-      {/* Pochette + métadonnées */}
-      <div className="flex min-w-0 flex-1 items-center gap-3 md:w-[28%] md:flex-none">
-        <Cover
-          seed={currentTrack?.id ?? 'mixify'}
-          title={currentTrack?.title ?? 'Mixify'}
-          className="h-12 w-12 shrink-0 md:h-14 md:w-14"
-        />
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-semibold text-white md:text-sm">
-            {currentTrack?.title ?? 'Aucun titre'}
-          </p>
-          <p className="truncate text-xs text-muted">{currentTrack?.artist.name ?? 'Mixify'}</p>
-        </div>
-      </div>
+    <>
+      <footer className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] left-0 right-0 z-30 flex h-[72px] shrink-0 items-center gap-2 border-t border-line bg-panel/95 px-3 backdrop-blur-xl md:relative md:bottom-auto md:z-auto md:h-[88px] md:gap-4 md:px-4 md:bg-panel md:backdrop-blur-none">
+        {/* Pochette + métadonnées */}
+        <button
+          type="button"
+          onClick={() => setFullPlayerOpen(true)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left md:w-[28%] md:flex-none"
+        >
+          <Cover
+            seed={currentTrack?.id ?? 'mixify'}
+            title={currentTrack?.title ?? 'Mixify'}
+            imageUrl={currentTrack?.album?.coverUrl}
+            className="h-12 w-12 shrink-0 md:h-14 md:w-14"
+          />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold text-white md:text-sm">
+              {currentTrack?.title ?? 'Aucun titre'}
+            </p>
+            <p className="truncate text-xs text-muted">{currentTrack?.artist.name ?? 'Mixify'}</p>
+          </div>
+        </button>
 
       {/* Transport + progression */}
       <div className="flex flex-[2] flex-col items-center gap-1">
@@ -176,6 +185,8 @@ export function Player() {
           {notice}
         </button>
       )}
-    </footer>
+      </footer>
+      <NowPlaying open={fullPlayerOpen} onClose={() => setFullPlayerOpen(false)} />
+    </>
   );
 }
