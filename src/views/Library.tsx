@@ -3,7 +3,7 @@ import { ChevronLeft, Heart, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-
 
 import { api } from '../api/musicApi';
 import { MediaCard } from '../components/common/MediaCard';
-import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
+import { Skeleton, SkeletonCard } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useLibrary, usePlaylist, useTracks } from '../hooks/useMusicApi';
 import { useLibraryStore } from '../store/libraryStore';

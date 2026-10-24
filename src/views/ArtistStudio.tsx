@@ -17,7 +17,7 @@ import { ImageUpload } from '../components/common/ImageUpload';
 
 import { api } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
-import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
+import { Skeleton, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useMyArtist, useArtistStats } from '../hooks/useMusicApi';
 import type {
