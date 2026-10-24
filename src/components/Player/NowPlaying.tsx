@@ -1,7 +1,6 @@
 import { ChevronDown, Heart, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
-import { FollowButton } from '../Follow/FollowButton';
 import { usePlayer } from '../../store/playerStore';
 import { useFollows } from '../../store/followsStore';
 import { formatTime } from '../../utils/format';
@@ -28,10 +27,10 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const cycleRepeat = usePlayer((s) => s.cycleRepeat);
   const toggleQueue = usePlayer((s) => s.toggleQueue);
 
-  const follows = useFollows((s) => s.follows);
+  const isFollowing = useFollows((s) => s.isFollowing);
   const toggleFollow = useFollows((s) => s.toggle);
   const artistId = currentTrack?.artist.id;
-  const isFollowing = artistId ? follows.has(artistId) : false;
+  const following = artistId ? isFollowing(artistId) : false;
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -94,13 +93,13 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <button
                 type="button"
                 onClick={() => artistId && toggleFollow(artistId)}
-                aria-pressed={isFollowing}
-                aria-label={isFollowing ? `Ne plus suivre ${currentTrack.artist.name}` : `Suivre ${currentTrack.artist.name}`}
+                aria-pressed={following}
+                aria-label={following ? `Ne plus suivre ${currentTrack.artist.name}` : `Suivre ${currentTrack.artist.name}`}
                 className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                  isFollowing ? 'bg-primary/20 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  following ? 'bg-primary/20 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <Heart size={20} fill={isFollowing ? 'currentColor' : 'none'} />
+                <Heart size={20} fill={following ? 'currentColor' : 'none'} />
               </button>
               <button
                 type="button"
