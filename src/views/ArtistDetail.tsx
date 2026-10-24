@@ -1,4 +1,4 @@
-import { ChevronLeft, Play } from 'lucide-react';
+import { BadgeCheck, ChevronLeft, Play } from 'lucide-react';
 
 import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
@@ -100,7 +100,10 @@ export function ArtistDetail({ artistId, onBack }: ArtistDetailProps) {
         </div>
         <div>
           <p className="text-xs uppercase tracking-wider text-muted">Artiste</p>
-          <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white">{artist.name}</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <h1 className="text-4xl font-extrabold tracking-tight text-white">{artist.name}</h1>
+            {artist.verified && <BadgeCheck size={28} className="text-primary" />}
+          </div>
           <p className="mt-2 text-sm text-muted">{tracks.length} titre{tracks.length > 1 ? 's' : ''}</p>
           <button
             type="button"

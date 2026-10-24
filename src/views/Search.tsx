@@ -159,6 +159,7 @@ export function SearchView({ query }: SearchViewProps) {
                   subtitle={artist.genres?.slice(0, 2).join(' · ')}
                   shape="circle"
                   imageUrl={artist.imageUrl}
+                  verified={(artist as any).verified}
                 />
                 <FollowButton artist={artist} />
               </div>

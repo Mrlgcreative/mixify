@@ -1,4 +1,4 @@
-import { Pause, Play } from 'lucide-react';
+import { BadgeCheck, Pause, Play } from 'lucide-react';
 
 import { Cover } from './Cover';
 
@@ -11,6 +11,7 @@ interface MediaCardProps {
   onSelect?: () => void;
   playing?: boolean;
   imageUrl?: string;
+  verified?: boolean;
 }
 
 /** Carte d'album / playlist / artiste (grille ou carrousel). */
@@ -23,6 +24,7 @@ export function MediaCard({
   onSelect,
   playing = false,
   imageUrl,
+  verified = false,
 }: MediaCardProps) {
   return (
     <div
@@ -62,7 +64,10 @@ export function MediaCard({
         )}
       </div>
       <div className={shape === 'circle' ? 'mt-2 text-center' : 'mt-3'}>
-        <p className="truncate text-sm font-semibold text-white">{title}</p>
+        <div className={`flex items-center gap-1 ${shape === 'circle' ? 'justify-center' : ''}`}>
+          <p className="truncate text-sm font-semibold text-white">{title}</p>
+          {verified && shape === 'circle' && <BadgeCheck size={14} className="shrink-0 text-primary" />}
+        </div>
         {subtitle && <p className="truncate text-xs text-muted">{subtitle}</p>}
       </div>
     </div>

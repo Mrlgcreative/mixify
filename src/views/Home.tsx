@@ -72,6 +72,7 @@ function ShelfRow({ shelf, onOpenAlbum, onOpenArtist }: ShelfProps & HomeProps) 
               shape="circle"
               onSelect={onOpenArtist ? () => onOpenArtist(item.id) : undefined}
               imageUrl={item.imageUrl}
+              verified={(item as any).verified}
             />
           );
         }
