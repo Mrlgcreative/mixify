@@ -105,16 +105,27 @@ export function Player() {
         </div>
       </div>
 
-      {/* File d'attente sur mobile */}
-      <button
-        type="button"
-        onClick={toggleQueue}
-        aria-pressed={queueOpen}
-        aria-label="File d'attente"
-        className={`shrink-0 transition md:hidden ${queueOpen ? 'text-primary' : 'text-muted hover:text-white'}`}
-      >
-        <ListMusic size={18} />
-      </button>
+      {/* Contrôles sur mobile */}
+      <div className="flex shrink-0 items-center gap-2 md:hidden">
+        <button
+          type="button"
+          onClick={toggleShuffle}
+          aria-pressed={shuffle}
+          aria-label="Mode aléatoire"
+          className={`transition ${shuffle ? 'text-primary' : 'text-muted hover:text-white'}`}
+        >
+          <Shuffle size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={toggleQueue}
+          aria-pressed={queueOpen}
+          aria-label="File d'attente"
+          className={`transition ${queueOpen ? 'text-primary' : 'text-muted hover:text-white'}`}
+        >
+          <ListMusic size={18} />
+        </button>
+      </div>
 
       {/* Auto-Mix, analyseur, volume, file d'attente */}
       <div className="hidden flex-1 items-center justify-end gap-4 md:flex">
