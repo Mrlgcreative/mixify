@@ -27,10 +27,10 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const cycleRepeat = usePlayer((s) => s.cycleRepeat);
   const toggleQueue = usePlayer((s) => s.toggleQueue);
 
-  const isFollowing = useFollows((s) => s.isFollowing);
+  const following = useFollows((s) => s.following);
   const toggleFollow = useFollows((s) => s.toggle);
   const artistId = currentTrack?.artist.id;
-  const following = artistId ? isFollowing(artistId) : false;
+  const isFollow = artistId ? following.some((f) => f.id === artistId) : false;
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -92,14 +92,14 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => artistId && toggleFollow(artistId)}
-                aria-pressed={following}
-                aria-label={following ? `Ne plus suivre ${currentTrack.artist.name}` : `Suivre ${currentTrack.artist.name}`}
+                onClick={() => artistId && toggleFollow({ id: artistId, name: currentTrack.artist.name })}
+                aria-pressed={isFollow}
+                aria-label={isFollow ? `Ne plus suivre ${currentTrack.artist.name}` : `Suivre ${currentTrack.artist.name}`}
                 className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                  following ? 'bg-primary/20 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  isFollow ? 'bg-primary/20 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <Heart size={20} fill={following ? 'currentColor' : 'none'} />
+                <Heart size={20} fill={isFollow ? 'currentColor' : 'none'} />
               </button>
               <button
                 type="button"
