@@ -1,8 +1,9 @@
-import { Loader2, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 import { Carousel } from '../components/common/Carousel';
 import { Cover } from '../components/common/Cover';
 import { MediaCard } from '../components/common/MediaCard';
+import { SkeletonCard } from '../components/common/Skeleton';
 import { useHistory, useHomeFeed } from '../hooks/useMusicApi';
 import { usePlayer } from '../store/playerStore';
 import { useAuthStore } from '../store/authStore';
@@ -119,8 +120,29 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
 
   if (loading) {
     return (
-      <div className="flex h-40 items-center justify-center gap-3 text-muted">
-        <Loader2 className="animate-spin" size={18} /> Chargement…
+      <div className="px-4 pb-10 md:px-6">
+        <div className="mt-2 h-8 w-48 animate-pulse rounded-md bg-white/10 md:h-9" />
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-card bg-white/5 pr-2 sm:gap-3 sm:pr-3">
+              <div className="h-10 w-10 animate-pulse rounded-l-card bg-white/10 sm:h-12 sm:w-12" />
+              <div className="h-4 flex-1 animate-pulse rounded bg-white/10" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 h-40 animate-pulse rounded-panel bg-white/5 md:h-48" />
+        <div className="mt-8 space-y-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i}>
+              <div className="mb-3 h-6 w-40 animate-pulse rounded bg-white/10" />
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {Array.from({ length: 6 }).map((_, j) => (
+                  <SkeletonCard key={j} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

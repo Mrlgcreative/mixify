@@ -1,5 +1,6 @@
-import { ChevronLeft, Loader2, Play } from 'lucide-react';
+import { ChevronLeft, Play } from 'lucide-react';
 
+import { Skeleton, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { usePlayer } from '../store/playerStore';
 import { useTracks } from '../hooks/useMusicApi';
@@ -15,8 +16,27 @@ export function AlbumDetail({ albumId, onBack }: AlbumDetailProps) {
 
   if (loading && !allTracks) {
     return (
-      <div className="flex h-40 items-center justify-center gap-3 text-muted">
-        <Loader2 className="animate-spin" size={18} /> Chargement de l'album…
+      <div className="px-4 py-6 md:px-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Skeleton className="h-9 w-9 rounded-full" />
+          <Skeleton className="h-5 w-16" />
+        </div>
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end">
+          <Skeleton className="h-40 w-40 rounded-panel md:h-52 md:w-52" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-8 w-64 max-w-full" />
+            <Skeleton className="h-4 w-40" />
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-28 rounded-full" />
+              <Skeleton className="h-9 w-24 rounded-full" />
+            </div>
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-card bg-card">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <SkeletonTrackRow key={i} />
+          ))}
+        </div>
       </div>
     );
   }

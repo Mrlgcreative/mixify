@@ -3,6 +3,7 @@ import { ChevronLeft, Heart, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-
 
 import { api } from '../api/musicApi';
 import { MediaCard } from '../components/common/MediaCard';
+import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useLibrary, usePlaylist, useTracks } from '../hooks/useMusicApi';
 import { useLibraryStore } from '../store/libraryStore';
@@ -51,8 +52,27 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
 
   if (loading && !data) {
     return (
-      <div className="flex h-40 items-center justify-center gap-3 text-muted">
-        <Loader2 className="animate-spin" size={18} /> Chargement de la bibliothèque…
+      <div className="px-4 py-6 md:px-6">
+        <div className="mb-6 flex items-center justify-between">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-9 w-28 rounded-full" />
+        </div>
+        <section className="mb-8">
+          <Skeleton className="mb-3 h-5 w-20" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </section>
+        <section>
+          <Skeleton className="mb-3 h-5 w-24" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </section>
       </div>
     );
   }

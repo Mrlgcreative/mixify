@@ -1,8 +1,9 @@
-import { Loader2, Music, Search as SearchIcon, User, Disc } from 'lucide-react';
+import { Music, Search as SearchIcon, User, Disc } from 'lucide-react';
 
 import { MediaCard } from '../components/common/MediaCard';
 import { TrackList } from '../components/common/TrackList';
 import { FollowButton } from '../components/Follow/FollowButton';
+import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
 import { useSearch } from '../hooks/useMusicApi';
 import { usePlayer } from '../store/playerStore';
 
@@ -76,9 +77,39 @@ export function SearchView({ query }: SearchViewProps) {
 
   if (loading) {
     return (
-      <div className="flex h-60 items-center justify-center gap-3 text-muted">
-        <Loader2 className="animate-spin" size={20} /> 
-        <span className="text-sm">Recherche en cours...</span>
+      <div className="px-4 py-6 md:px-6">
+        <div className="mb-6 space-y-2">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <section className="mb-8">
+          <Skeleton className="mb-3 h-5 w-16" />
+          <div className="overflow-hidden rounded-card bg-card">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonTrackRow key={i} />
+            ))}
+          </div>
+        </section>
+        <section className="mb-8">
+          <Skeleton className="mb-3 h-5 w-24" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex flex-col items-center gap-2">
+                <Skeleton className="h-24 w-24 rounded-full sm:h-28 sm:w-28" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section>
+          <Skeleton className="mb-3 h-5 w-16" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </section>
       </div>
     );
   }

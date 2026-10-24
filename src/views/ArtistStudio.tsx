@@ -17,6 +17,7 @@ import { ImageUpload } from '../components/common/ImageUpload';
 
 import { api } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
+import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useMyArtist, useArtistStats } from '../hooks/useMusicApi';
 import type {
@@ -69,8 +70,27 @@ export function ArtistStudio() {
 
   if (loading && !data && !error) {
     return (
-      <div className="flex h-40 items-center justify-center gap-3 text-muted">
-        <Loader2 className="animate-spin" size={18} /> Chargement de l'espace artiste…
+      <div className="px-4 py-6 md:px-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-12 w-12 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </div>
+          <Skeleton className="h-9 w-32 rounded-full" />
+        </div>
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-card" />
+          ))}
+        </div>
+        <div className="overflow-hidden rounded-card bg-card">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonTrackRow key={i} />
+          ))}
+        </div>
       </div>
     );
   }
