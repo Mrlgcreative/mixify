@@ -325,11 +325,50 @@ export class AudioEngine {
     // Le fondu ne peut pas dépasser la durée restante du titre sortant,
     // sinon la piste sortirait du fondu et laisserait un trou de silence.
     const remaining = Math.max(0, (duration - position) / outgoing.rate);
-    const fadeDuration = resolveFadeDuration(
-      this.nextTransition,
-      this.crossfadeSeconds,
-      remaining,
-    );
+    const outBpm = outgoing.track?.bpm ?? 0;
+    const inBpm = this.nextTrack.bpm ?? 0;
+    const sameAlbum =
+      !!outgoing.track?.album?.id &&
+      !!this.nextTrack.album?.id &&
+      outgoing.track.album.id === this.nextTrack.album.id;
+    const sameArtist =
+      !!outgoing.track?.artist?.id &&
+      !!this.nextTrack.artist?.id &&
+      outgoing.track.artist.id === this.nextTrack.artist.id;
+
+    // AutoMix à la manière d'Apple Music :
+    //  - album continu -> transitions très discrètes (ou quasi sans fondu)
+    //  - écart de BPM important -> éviter un long fondu, privilégier un enchaînement plus sec
+    let transition = this.nextTransition;
+    if (!transition && sameAlbum) {
+      transition = { style: 'blend', duration: 0.8, tempoSync: true, reason: null };
+    } else if (!transition && sameArtist && Math.abs(outBpm - inBpm) > 14) {
+      transition = { style: 'cut', duration: 0.08, tempoSync: false, reason: null };
+    } else if (!transition && outgoing.track?.genre && this.nextTrack.genre && outgoing.track.genre === this.nextTrack.genre && !sameAlbum) {
+      // Certains genres se succèdent mieux avec des transitions très discrètes
+      transition = { style: 'blend', duration: 1.2, tempoSync: true, reason: null };
+    }
+
+    if (!this.nextTransition && transition) {
+      this.nextTransition = transition;
+    }
+
+    let fadeDuration = resolveFadeDuration(transition, this.crossfadeSeconds, remaining);
+    if (sameAlbum && !this.nextTransition) {
+      fadeDuration = Math.min(0.9, fadeDuration);
+    } else if (sameAlbum && this.nextTransition?.style !== 'cut') {
+      fadeDuration = Math.min(fadeDuration, 1.0);
+    }
+    if (!sameAlbum && outBpm && inBpm) {
+      const diff = Math.abs(outBpm - inBpm);
+      if (diff > 16 && transition?.tempoSync === false) {
+        fadeDuration = Math.min(fadeDuration, 0.6);
+      } else if (diff > 12 && fadeDuration > 4) {
+        fadeDuration = Math.min(fadeDuration, 4);
+      } else if (diff > 10 && fadeDuration > 3) {
+        fadeDuration = Math.min(fadeDuration, 3);
+      }
+    }
     if (fadeDuration <= 0.05) {
       this.armed = false;
       this.nextTransition = null;
@@ -341,13 +380,15 @@ export class AudioEngine {
     const outBeat = this.beats.get(outgoing.url) ?? null;
     const inBeat = this.beats.get(this.nextUrl) ?? null;
 
+    const forceCut = transition?.style === 'cut';
+    const skipTempoSync = forceCut || transition?.tempoSync === false;
     const plan = planBeatSync({
       position,
       duration,
       crossfade: fadeDuration,
       // Priorité aux BPM fournis par l'API ; l'estimation comble le trou.
-      outBpm: outgoing.track?.bpm ?? outBeat?.bpm ?? 0,
-      inBpm: this.nextTrack.bpm ?? inBeat?.bpm ?? 0,
+      outBpm: skipTempoSync ? 0 : outgoing.track?.bpm ?? outBeat?.bpm ?? 0,
+      inBpm: skipTempoSync ? 0 : this.nextTrack.bpm ?? inBeat?.bpm ?? 0,
       outPhase: outBeat?.phase ?? 0,
       inPhase: inBeat?.phase ?? 0,
       outRate: outgoing.rate,
