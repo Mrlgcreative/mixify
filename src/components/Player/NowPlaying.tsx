@@ -1,4 +1,5 @@
-import { ChevronDown, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronDown, FileText, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { Cover } from '../common/Cover';
 import { usePlayer } from '../../store/playerStore';
@@ -33,11 +34,52 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const canFollow = Boolean(artistId && artistId !== 'inconnu' && artistId.trim() !== '');
   const isFollow = canFollow ? following.some((f) => f.id === artistId) : false;
 
+  const [showLyricsSheet, setShowLyricsSheet] = useState(false);
+  const [lyrics, setLyrics] = useState<string | null>(null);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [lyricsError, setLyricsError] = useState<string | null>(null);
+
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
+
+  useEffect(() => {
+    setLyrics(null);
+    setLyricsError(null);
+    setLyricsLoading(false);
+    setShowLyricsSheet(false);
+  }, [currentTrack?.id]);
 
   if (!open || !currentTrack) return null;
 
   const progress = duration > 0 ? (position / duration) * 100 : 0;
+
+  const fetchLyrics = async () => {
+    if (lyrics || lyricsLoading) return;
+    setLyricsLoading(true);
+    setLyricsError(null);
+    try {
+      const params = new URLSearchParams({
+        artist: currentTrack.artist.name,
+        title: currentTrack.title,
+      });
+      const res = await fetch(`http://localhost:3001/api/lyrics?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('mixify.token')}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur');
+      setLyrics(data.paroles);
+    } catch (e) {
+      setLyricsError(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setLyricsLoading(false);
+    }
+  };
+
+  const openLyricsSheet = () => {
+    setShowLyricsSheet(true);
+    void fetchLyrics();
+  };
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-[#050510] md:hidden">
@@ -84,7 +126,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
           </div>
         </div>
 
-        <div className="w-full max-w-[340px] space-y-8">
+        <div className="w-full max-w-[340px] space-y-5">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-2xl font-semibold tracking-tight text-white">{currentTrack.title}</h1>
@@ -118,6 +160,15 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               </button>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={openLyricsSheet}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+          >
+            <FileText size={16} />
+            Voir les paroles
+          </button>
 
           <div className="space-y-2">
             <div className="group relative h-1.5 w-full overflow-hidden rounded-full bg-white/10">
@@ -189,6 +240,54 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
           </div>
         </div>
       </main>
+
+      {showLyricsSheet && (
+        <div className="fixed inset-0 z-[90] md:hidden">
+          <button
+            type="button"
+            aria-label="Fermer les paroles"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowLyricsSheet(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 flex h-[85vh] flex-col rounded-t-[32px] bg-gradient-to-b from-[#2a1745] via-[#120a24] to-[#050510] shadow-[0_-60px_160px_rgba(139,92,246,0.35)]">
+            <div className="flex items-center justify-center pt-3">
+              <div className="h-1 w-10 rounded-full bg-white/30" />
+            </div>
+            <header className="flex items-center justify-between px-5 pb-2 pt-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-white">{currentTrack.title}</p>
+                <p className="truncate text-xs text-white/60">{currentTrack.artist.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLyricsSheet(false)}
+                aria-label="Fermer"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white/60 transition hover:bg-white/5 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <main className="flex-1 overflow-y-auto px-6 pb-[calc(env(safe-area-inset-bottom)+36px)] pt-6">
+              <div className="mx-auto flex max-w-[360px] flex-col items-center text-center">
+                {lyricsLoading && (
+                  <div className="py-10 text-sm text-white/50">Chargement des paroles...</div>
+                )}
+                {lyricsError && (
+                  <div className="py-10 text-sm text-white/60">{lyricsError}</div>
+                )}
+                {lyrics && !lyricsLoading && (
+                  <p className="whitespace-pre-wrap text-xl leading-[1.9] tracking-tight text-white/95 sm:text-2xl">
+                    {lyrics.replace(/\n\n\*{3}.*$/s, '')}
+                  </p>
+                )}
+                {!lyrics && !lyricsLoading && !lyricsError && (
+                  <div className="py-10 text-sm text-white/40">Aucune parole disponible</div>
+                )}
+              </div>
+            </main>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
