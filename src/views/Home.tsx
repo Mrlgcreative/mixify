@@ -88,14 +88,14 @@ function Shortcut({ track, queue }: { track: Track; queue: Track[] }) {
     <button
       type="button"
       onClick={() => (active ? void toggle() : void playTrack(track, queue))}
-      className="group flex items-center gap-3 overflow-hidden rounded-card bg-white/10 pr-3 text-left transition hover:bg-white/20"
+      className="group flex items-center gap-2 overflow-hidden rounded-card bg-white/10 pr-2 text-left transition hover:bg-white/20 sm:gap-3 sm:pr-3"
     >
-      <Cover seed={track.id} title={track.title} className="h-12 w-12 shrink-0 text-sm" />
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">
+      <Cover seed={track.id} title={track.title} className="h-10 w-10 shrink-0 text-xs sm:h-12 sm:w-12 sm:text-sm" />
+      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-white sm:text-sm">
         {track.title}
       </span>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-black opacity-0 transition group-hover:opacity-100">
-        <Play size={14} fill="currentColor" className="ml-0.5" />
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-black opacity-100 transition sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100">
+        <Play size={12} fill="currentColor" className="ml-0.5 sm:h-3.5 sm:w-3.5" />
       </span>
     </button>
   );
@@ -134,7 +134,7 @@ export function Home() {
       </h2>
 
       {shortcuts.length > 0 && (
-        <section className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <section className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
           {shortcuts.map((track) => (
             <Shortcut key={track.id} track={track} queue={catalog.filter(isTrack)} />
           ))}
