@@ -23,10 +23,10 @@ export function MobileNav({ view, onNavigate }: MobileNavProps) {
   ];
 
   return (
-    <div className="fixed bottom-[calc(76px+64px+env(safe-area-inset-bottom))] left-0 right-0 z-40 flex justify-center px-3 pb-2 md:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center border-t border-white/10 bg-panel/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
       <nav
         aria-label="Navigation principale"
-        className="flex w-full max-w-[420px] items-center justify-between rounded-full border border-white/10 bg-panel/95 px-2 py-1.5 shadow-[0_10px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+        className="flex w-full max-w-[420px] items-center justify-between px-1 py-1"
       >
         {items.map((item) => {
           const Icon = item.icon;

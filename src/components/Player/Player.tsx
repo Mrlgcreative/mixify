@@ -34,7 +34,7 @@ export function Player() {
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
   return (
-    <footer className="fixed bottom-[calc(64px+env(safe-area-inset-bottom))] left-0 right-0 z-30 flex h-[76px] shrink-0 items-center gap-2 border-t border-line bg-panel/95 px-3 backdrop-blur-xl md:relative md:bottom-auto md:z-auto md:h-[88px] md:gap-4 md:px-4 md:bg-panel md:backdrop-blur-none">
+    <footer className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] left-0 right-0 z-30 flex h-[72px] shrink-0 items-center gap-2 border-t border-line bg-panel/95 px-3 backdrop-blur-xl md:relative md:bottom-auto md:z-auto md:h-[88px] md:gap-4 md:px-4 md:bg-panel md:backdrop-blur-none">
       {/* Pochette + métadonnées */}
       <div className="flex min-w-0 flex-1 items-center gap-3 md:w-[28%] md:flex-none">
         <Cover
