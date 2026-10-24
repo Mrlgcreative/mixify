@@ -185,7 +185,7 @@ export default function App() {
           onSelectPlaylist={openPlaylist}
         />
 
-        <main className="bg-grid flex min-w-0 flex-1 flex-col overflow-hidden bg-panel md:rounded-panel">
+        <main className="bg-grid flex min-w-0 flex-1 flex-col overflow-hidden bg-panel pb-[calc(76px+64px+env(safe-area-inset-bottom))] md:rounded-panel md:pb-0">
           <Header
             view={playlistRoute ? 'library' : view}
             canGoBack={playlistRoute ? true : nav.cursor > 0}
