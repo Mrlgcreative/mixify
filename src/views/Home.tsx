@@ -14,7 +14,7 @@ interface ShelfProps {
 }
 
 /** Un rayon de la page d'accueil, adapté au type de contenu. */
-function ShelfRow({ shelf }: ShelfProps) {
+function ShelfRow({ shelf, onOpenAlbum, onOpenArtist }: ShelfProps & HomeProps) {
   const playTrack = usePlayer((s) => s.playTrack);
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
@@ -57,6 +57,7 @@ function ShelfRow({ shelf }: ShelfProps) {
               seed={item.id}
               title={item.title}
               subtitle={`${item.year ?? ''} ${item.artist?.name ?? ''}`.trim()}
+              onSelect={onOpenAlbum ? () => onOpenAlbum(item.id) : undefined}
             />
           );
         }
@@ -68,6 +69,7 @@ function ShelfRow({ shelf }: ShelfProps) {
               title={item.name}
               subtitle={item.genres?.join(' · ')}
               shape="circle"
+              onSelect={onOpenArtist ? () => onOpenArtist(item.id) : undefined}
             />
           );
         }
@@ -102,7 +104,12 @@ function Shortcut({ track, queue }: { track: Track; queue: Track[] }) {
   );
 }
 
-export function Home() {
+interface HomeProps {
+  onOpenAlbum?: (id: string) => void;
+  onOpenArtist?: (id: string) => void;
+}
+
+export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
   const { data, loading, error } = useHomeFeed();
   const user = useAuthStore((s) => s.user);
   const history = useHistory(user ? 0 : -1);
@@ -187,7 +194,7 @@ export function Home() {
 
       <div className="mt-8">
         {otherShelves.map((shelf) => (
-          <ShelfRow key={shelf.id} shelf={shelf} />
+          <ShelfRow key={shelf.id} shelf={shelf} onOpenAlbum={onOpenAlbum} onOpenArtist={onOpenArtist} />
         ))}
       </div>
     </div>

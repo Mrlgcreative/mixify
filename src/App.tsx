@@ -13,6 +13,8 @@ import { ArtistStudio } from './views/ArtistStudio';
 import { LibraryView, PlaylistDetail } from './views/Library';
 import { Profile } from './views/Profile';
 import { SearchView } from './views/Search';
+import { AlbumDetail } from './views/AlbumDetail';
+import { ArtistDetail } from './views/ArtistDetail';
 import { useAuthStore } from './store/authStore';
 import { useFollows } from './store/followsStore';
 import { useLibraryStore } from './store/libraryStore';
@@ -40,6 +42,8 @@ export default function App() {
   const [nav, setNav] = useState<Navigation>({ stack: ['home'], cursor: 0 });
   const [query, setQuery] = useState('');
   const [playlistRoute, setPlaylistRoute] = useState<string | null>(() => playlistIdFromPath());
+  const [albumRoute, setAlbumRoute] = useState<string | null>(null);
+  const [artistRoute, setArtistRoute] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [onboarded, setOnboarded] = useState(() => {
     try {
@@ -115,6 +119,8 @@ export default function App() {
   const navigate = (next: ViewName) => {
     if (playlistRoute) window.history.pushState({}, '', '/');
     setPlaylistRoute(null);
+    setAlbumRoute(null);
+    setArtistRoute(null);
     setNav((current) => {
       const stack = current.stack.slice(0, current.cursor + 1);
       stack.push(next);
@@ -148,6 +154,26 @@ export default function App() {
     });
   };
 
+  const openAlbum = (id: string) => {
+    setPlaylistRoute(null);
+    setArtistRoute(null);
+    setAlbumRoute(id);
+  };
+
+  const closeAlbum = () => {
+    setAlbumRoute(null);
+  };
+
+  const openArtist = (id: string) => {
+    setPlaylistRoute(null);
+    setAlbumRoute(null);
+    setArtistRoute(id);
+  };
+
+  const closeArtist = () => {
+    setArtistRoute(null);
+  };
+
   return (
     // La clé remonte les vues après connexion/déconnexion : les données
     // dépendant du compte (bibliothèque, playlists) sont rechargées.
@@ -178,9 +204,13 @@ export default function App() {
           <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             {playlistRoute ? (
               <PlaylistDetail id={playlistRoute} onBack={closePlaylist} />
+            ) : albumRoute ? (
+              <AlbumDetail albumId={albumRoute} onBack={closeAlbum} />
+            ) : artistRoute ? (
+              <ArtistDetail artistId={artistRoute} onBack={closeArtist} />
             ) : (
               <>
-                {view === 'home' && <Home />}
+                {view === 'home' && <Home onOpenAlbum={openAlbum} onOpenArtist={openArtist} />}
                 {view === 'search' && <SearchView query={query} />}
                 {view === 'library' && <LibraryView onSelect={openPlaylist} />}
                 {view === 'artist' && <ArtistStudio />}
