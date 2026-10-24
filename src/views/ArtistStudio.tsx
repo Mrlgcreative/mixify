@@ -68,6 +68,44 @@ export function ArtistStudio() {
     if (!loading && data === null) setTab('profile');
   }, [data, loading]);
 
+  useEffect(() => {
+    if (!artist) return;
+    if (artist.verified) return;
+    setVerifyLoading(true);
+    fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/artists/verify`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('mixify.token')}` },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.requests) setVerifyStatus(d.requests);
+      })
+      .catch(() => {})
+      .finally(() => setVerifyLoading(false));
+  }, [artist?.id, artist?.verified]);
+
+  const submitVerification = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!artist) return;
+    setVerifyError(null);
+    setVerifySent(false);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/artists/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('mixify.token')}`,
+        },
+        body: JSON.stringify(verifyForm),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur');
+      setVerifySent(true);
+      setVerifyStatus((s) => [data.request, ...s]);
+    } catch (err: any) {
+      setVerifyError(err.message);
+    }
+  };
+
   if (loading && !data && !error) {
     return (
       <div className="px-4 py-6 md:px-6">
@@ -707,6 +745,19 @@ function ProfileForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [verifyForm, setVerifyForm] = useState({
+    instagram_url: '',
+    tiktok_url: '',
+    youtube_url: '',
+    spotify_url: '',
+    soundcloud_url: '',
+    website_url: '',
+    message: '',
+  });
+  const [verifyStatus, setVerifyStatus] = useState<any[]>([]);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifySent, setVerifySent] = useState(false);
 
   const set = (field: keyof ArtistInput) => (
     event: { target: { value: string } },
@@ -852,6 +903,73 @@ function ProfileForm({
           )}
         </div>
       </form>
+
+      {artist && !artist.verified && (
+        <section className="mt-8 rounded-card bg-card p-6 shadow-card">
+          <div className="mb-4 flex items-center gap-2">
+            <BadgeCheck size={18} className="text-primary" />
+            <h2 className="text-lg font-semibold text-white">Demande de certification</h2>
+          </div>
+          <p className="mb-4 text-sm text-muted">
+            Obtiens le badge certifié en prouvant ton identité artistique via tes liens officiels.
+          </p>
+
+          {verifyStatus.find((r) => r.status === 'pending') ? (
+            <p className="text-sm text-primary">Ta demande est en attente de validation.</p>
+          ) : verifyStatus.find((r) => r.status === 'approved') ? (
+            <p className="text-sm text-primary">Certifié ✓</p>
+          ) : (
+            <form onSubmit={submitVerification} className="grid gap-3 md:grid-cols-2">
+              <label className={labelClass}>
+                Instagram
+                <input value={verifyForm.instagram_url} onChange={(e) => setVerifyForm((f) => ({ ...f, instagram_url: e.target.value }))} placeholder="https://instagram.com/..." className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                TikTok
+                <input value={verifyForm.tiktok_url} onChange={(e) => setVerifyForm((f) => ({ ...f, tiktok_url: e.target.value }))} placeholder="https://tiktok.com/@..." className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                YouTube
+                <input value={verifyForm.youtube_url} onChange={(e) => setVerifyForm((f) => ({ ...f, youtube_url: e.target.value }))} placeholder="https://youtube.com/..." className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                Spotify
+                <input value={verifyForm.spotify_url} onChange={(e) => setVerifyForm((f) => ({ ...f, spotify_url: e.target.value }))} placeholder="https://open.spotify.com/..." className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                SoundCloud
+                <input value={verifyForm.soundcloud_url} onChange={(e) => setVerifyForm((f) => ({ ...f, soundcloud_url: e.target.value }))} placeholder="https://soundcloud.com/..." className={inputClass} />
+              </label>
+              <label className={labelClass}>
+                Site web
+                <input value={verifyForm.website_url} onChange={(e) => setVerifyForm((f) => ({ ...f, website_url: e.target.value }))} placeholder="https://..." className={inputClass} />
+              </label>
+              <label className={`${labelClass} md:col-span-2`}>
+                Message
+                <textarea value={verifyForm.message} onChange={(e) => setVerifyForm((f) => ({ ...f, message: e.target.value }))} rows={2} placeholder="Preuve / justification..." className={inputClass} />
+              </label>
+              {verifyError && <p className="md:col-span-2 text-sm text-danger">{verifyError}</p>}
+              {verifySent && <p className="md:col-span-2 text-sm text-primary">Demande envoyée</p>}
+              <div className="md:col-span-2">
+                <button type="submit" className="rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-black">Envoyer la demande</button>
+              </div>
+            </form>
+          )}
+
+          {verifyStatus.filter((r) => r.status === 'rejected').length > 0 && (
+            <div className="mt-4 rounded-card bg-white/5 p-4">
+              <p className="mb-2 text-sm font-semibold text-white">Demandes rejetées</p>
+              {verifyStatus
+                .filter((r) => r.status === 'rejected')
+                .map((r) => (
+                  <div key={r.id} className="mb-2 text-xs text-muted">
+                    Rejetée {r.admin_note && `— ${r.admin_note}`}
+                  </div>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

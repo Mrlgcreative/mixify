@@ -18,6 +18,10 @@ const STEPS = [
     title: 'Ton profil artiste',
     hint: 'Ces informations apparaîtront sur ton profil. Tout est modifiable plus tard.',
   },
+  {
+    title: 'Certification',
+    hint: 'Demande un badge certifié (facultatif). Tu peux le faire plus tard depuis ton studio.',
+  },
 ];
 
 /** Inscription artiste en trois étapes : compte, identité, profil public. */
@@ -32,6 +36,13 @@ export function ArtistRegister() {
   const [genres, setGenres] = useState('');
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [youtube, setYoutube] = useState('');
+  const [spotify, setSpotify] = useState('');
+  const [soundcloud, setSoundcloud] = useState('');
+  const [certMessage, setCertMessage] = useState('');
+  const [skipCert, setSkipCert] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const busy = useAuthStore((s) => s.busy);
@@ -250,6 +261,46 @@ export function ArtistRegister() {
           </>
         )}
 
+        {step === 3 && (
+          <>
+            <label className="flex items-center gap-2 text-sm text-white">
+              <input type="checkbox" checked={skipCert} onChange={(e) => setSkipCert(e.target.checked)} />
+              Demander plus tard
+            </label>
+            {!skipCert && (
+              <div className="flex flex-col gap-3">
+                <label className={labelClass}>
+                  Instagram
+                  <input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="https://instagram.com/..." className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  TikTok
+                  <input value={tiktok} onChange={(e) => setTiktok(e.target.value)} placeholder="https://tiktok.com/@..." className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  YouTube
+                  <input value={youtube} onChange={(e) => setYoutube(e.target.value)} placeholder="https://youtube.com/..." className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Spotify
+                  <input value={spotify} onChange={(e) => setSpotify(e.target.value)} placeholder="https://open.spotify.com/..." className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  SoundCloud
+                  <input value={soundcloud} onChange={(e) => setSoundcloud(e.target.value)} placeholder="https://soundcloud.com/..." className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Message (facultatif)
+                  <textarea value={certMessage} onChange={(e) => setCertMessage(e.target.value)} rows={2} placeholder="Explique pourquoi tu mérites le badge certifié..." className={inputClass} />
+                </label>
+              </div>
+            )}
+            {skipCert && (
+              <p className="text-xs text-muted">Tu pourras demander la certification depuis ton Espace Artiste plus tard.</p>
+            )}
+          </>
+        )}
+
         {message && (
           <p role="alert" className="text-xs leading-snug text-danger">
             {message}
@@ -275,10 +326,10 @@ export function ArtistRegister() {
             {busy && <Loader2 size={16} className="animate-spin" />}
             {busy
               ? 'Un instant…'
-              : step < 2
+              : step < STEPS.length - 1
                 ? 'Continuer'
                 : 'Créer mon compte artiste'}
-            {!busy && step < 2 && <ArrowRight size={15} />}
+            {!busy && step < STEPS.length - 1 && <ArrowRight size={15} />}
           </button>
         </div>
       </form>

@@ -18,6 +18,7 @@ interface AuthStore {
     role: Role;
     birthDate?: string;
     artist?: ArtistSignupDetails;
+    verification?: Record<string, unknown>;
   }) => Promise<void>;
   logout: () => void;
   /** Remplace l'utilisateur courant après une mise à jour du profil. */
