@@ -118,6 +118,14 @@ export function Player() {
         </button>
         <button
           type="button"
+          onClick={cycleRepeat}
+          aria-label={`Répétition : ${repeat}`}
+          className={`relative transition ${repeat === 'off' ? 'text-muted hover:text-white' : 'text-primary'}`}
+        >
+          <RepeatIcon size={16} />
+        </button>
+        <button
+          type="button"
           onClick={toggleQueue}
           aria-pressed={queueOpen}
           aria-label="File d'attente"
