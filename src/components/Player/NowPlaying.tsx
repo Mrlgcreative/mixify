@@ -92,7 +92,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => artistId && toggleFollow({ id: artistId, name: currentTrack.artist.name })}
+                onClick={() => artistId && toggleFollow(currentTrack.artist)}
                 aria-pressed={isFollow}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
                   isFollow
