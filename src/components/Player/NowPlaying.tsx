@@ -5,6 +5,7 @@ import { Cover } from '../common/Cover';
 import { usePlayer } from '../../store/playerStore';
 import { useFollows } from '../../store/followsStore';
 import { formatTime } from '../../utils/format';
+import { shareTrackToStory } from '../../utils/share';
 
 interface NowPlayingProps {
   open: boolean;
@@ -77,66 +78,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   };
 
   const handleShare = async () => {
-    if (!currentTrack) return;
-    const url = `${window.location.origin}/track/${currentTrack.id}`;
-    const text = `${currentTrack.title} • ${currentTrack.artist.name} sur Mixify`;
-    const title = `${currentTrack.title} - ${currentTrack.artist.name}`;
-
-    try {
-      const files: File[] = [];
-
-      if (typeof navigator !== 'undefined' && navigator.canShare) {
-        try {
-          const coverUrl = currentTrack.album?.coverUrl || (currentTrack as any).coverUrl;
-          if (coverUrl) {
-            const res = await fetch(coverUrl);
-            if (res.ok) {
-              const blob = await res.blob();
-              const ext = blob.type.split('/')[1] || 'jpg';
-              files.push(new File([blob], `mixify-${currentTrack.id}.${ext}`, { type: blob.type }));
-            }
-          }
-        } catch {
-          // ignore cover fetch errors
-        }
-
-        try {
-          if ((currentTrack as any).audio_url && files.length === 0) {
-            const res = await fetch((currentTrack as any).audio_url);
-            if (res.ok) {
-              const blob = await res.blob();
-              const type = blob.type || 'audio/mpeg';
-              const ext = type.split('/')[1]?.replace('mpeg', 'mp3') || 'mp3';
-              files.push(new File([blob], `mixify-${currentTrack.id}.${ext}`, { type }));
-            }
-          }
-        } catch {
-          // ignore audio fetch errors
-        }
-
-        const shareData: ShareData = { title, text: `${text}\n${url}`, url };
-        if (files.length > 0) {
-          (shareData as any).files = files;
-        }
-
-        if ((navigator.canShare as any)(shareData)) {
-          await navigator.share(shareData);
-          return;
-        }
-      }
-
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share({ title, text: `${text}\n${url}`, url });
-        return;
-      }
-
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        alert('Lien copié dans le presse-papiers');
-      }
-    } catch {
-      // Ignoré si l'utilisateur annule le partage
-    }
+    await shareTrackToStory(currentTrack);
   };
 
   const openLyricsSheet = () => {
