@@ -29,7 +29,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
   const following = useFollows((s) => s.following);
   const toggleFollow = useFollows((s) => s.toggle);
-  const artistId = currentTrack?.artist.id;
+  const artistId = currentTrack?.artist?.id;
   const isFollow = artistId ? following.some((f) => f.id === artistId) : false;
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
@@ -90,18 +90,20 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <p className="mt-1 truncate text-base text-white/60">{currentTrack.artist.name}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => artistId && toggleFollow(currentTrack.artist)}
-                aria-pressed={isFollow}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  isFollow
-                    ? 'border border-white/30 text-white/80 hover:border-white/50'
-                    : 'bg-white text-black hover:bg-white/90'
-                }`}
-              >
-                {isFollow ? 'Abonné' : "S'abonner"}
-              </button>
+              {artistId && (
+                <button
+                  type="button"
+                  onClick={() => toggleFollow(currentTrack.artist)}
+                  aria-pressed={isFollow}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    isFollow
+                      ? 'border border-white/30 text-white/80 hover:border-white/50'
+                      : 'bg-white text-black hover:bg-white/90'
+                  }`}
+                >
+                  {isFollow ? 'Abonné' : "S'abonner"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleQueue}
