@@ -1,7 +1,9 @@
-import { ChevronDown, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronDown, Heart, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
+import { FollowButton } from '../Follow/FollowButton';
 import { usePlayer } from '../../store/playerStore';
+import { useFollows } from '../../store/followsStore';
 import { formatTime } from '../../utils/format';
 
 interface NowPlayingProps {
@@ -25,6 +27,11 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const toggleShuffle = usePlayer((s) => s.toggleShuffle);
   const cycleRepeat = usePlayer((s) => s.cycleRepeat);
   const toggleQueue = usePlayer((s) => s.toggleQueue);
+
+  const follows = useFollows((s) => s.follows);
+  const toggleFollow = useFollows((s) => s.toggle);
+  const artistId = currentTrack?.artist.id;
+  const isFollowing = artistId ? follows.has(artistId) : false;
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -78,22 +85,35 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
         </div>
 
         <div className="w-full max-w-[340px] space-y-8">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-2xl font-semibold tracking-tight text-white">{currentTrack.title}</h1>
               <p className="mt-1 truncate text-base text-white/60">{currentTrack.artist.name}</p>
             </div>
-            <button
-              type="button"
-              onClick={toggleQueue}
-              aria-pressed={queueOpen}
-              aria-label="File d'attente"
-              className={`mt-1 flex h-10 w-10 items-center justify-center rounded-full transition ${
-                queueOpen ? 'bg-white/10 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <ListMusic size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => artistId && toggleFollow(artistId)}
+                aria-pressed={isFollowing}
+                aria-label={isFollowing ? `Ne plus suivre ${currentTrack.artist.name}` : `Suivre ${currentTrack.artist.name}`}
+                className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
+                  isFollowing ? 'bg-primary/20 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Heart size={20} fill={isFollowing ? 'currentColor' : 'none'} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleQueue}
+                aria-pressed={queueOpen}
+                aria-label="File d'attente"
+                className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
+                  queueOpen ? 'bg-white/10 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <ListMusic size={20} />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
