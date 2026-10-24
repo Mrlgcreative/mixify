@@ -9,6 +9,8 @@ import type {
   HistoryEntry,
   HomeFeed,
   Library,
+  MixPlan,
+  MixTransition,
   Playlist,
   ProfileFollows,
   SearchResults,
@@ -357,6 +359,8 @@ export interface MusicApi {
   deletePlaylist(id: string): Promise<void>;
   addTrackToPlaylist(playlistId: string, trackId: string): Promise<void>;
   removeTrackFromPlaylist(playlistTrackId: string): Promise<void>;
+  /** Ordre et transitions d'un mix IA (rejette si l'appel échoue : la lecture continue en local). */
+  getMixPlan(trackIds: string[]): Promise<MixPlan>;
   /** Téléverse le fichier vers R2 puis publie le morceau au catalogue. */
   uploadTrack(
     file: File,
@@ -723,6 +727,38 @@ class MixifyApi implements MusicApi {
     await request(`/api/playlists?type=track&id=${encodeURIComponent(playlistTrackId)}`, {
       method: 'DELETE',
     });
+  }
+
+  async getMixPlan(trackIds: string[]): Promise<MixPlan> {
+    const { mix } = await request<{
+      mix: Array<{
+        id: string;
+        transition?: {
+          style?: MixTransition['style'] | null;
+          duration?: number;
+          beatSync?: boolean;
+          reason?: string | null;
+        } | null;
+      }>;
+    }>('/api/mix', {
+      method: 'POST',
+      body: JSON.stringify({ trackIds, mixType: 'ai' }),
+    });
+
+    const transitions: Record<string, MixTransition> = {};
+    mix.forEach((item, index) => {
+      const next = mix[index + 1];
+      const transition = item.transition;
+      if (!next || !transition?.style || typeof transition.duration !== 'number') return;
+      transitions[`${item.id}->${next.id}`] = {
+        style: transition.style,
+        duration: transition.duration,
+        tempoSync: transition.beatSync !== false,
+        reason: transition.reason ?? null,
+      };
+    });
+
+    return { order: mix.map((item) => item.id), transitions };
   }
 
   async uploadTrack(

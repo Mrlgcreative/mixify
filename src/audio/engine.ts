@@ -1,9 +1,10 @@
-import type { Track } from '../types/music';
+import type { Track, MixTransition } from '../types/music';
 import {
   MAX_CROSSFADE_SECONDS,
   MIN_CROSSFADE_SECONDS,
   equalPowerCurves,
   planBeatSync,
+  resolveFadeDuration,
 } from './crossfade';
 import { estimateTempo, type TempoEstimate } from './tempo';
 
@@ -67,6 +68,9 @@ export class AudioEngine {
   private nextTrack: Track | null = null;
   private nextUrl = '';
   private nextLoaded = false;
+
+  /** Transition IA pour la paire (en cours) -> (suivant), null = mode classique. */
+  private nextTransition: MixTransition | null = null;
 
   /** Tempo estimé par URL (null = non rythmique, voir tempo.ts). */
   private readonly beats = new Map<string, TempoEstimate | null>();
@@ -204,10 +208,11 @@ export class AudioEngine {
   }
 
   /** Déclare le titre suivant : il est préchargé dans le deck idle. */
-  async setNext(track: Track | null, url: string): Promise<void> {
+  async setNext(track: Track | null, url: string, transition: MixTransition | null = null): Promise<void> {
     this.nextTrack = track;
     this.nextUrl = url;
     this.nextLoaded = false;
+    this.nextTransition = transition;
     if (!track || !this.ctx) return;
     this.startBeatAnalysis(url); // tempo du suivant, prêt avant l'armement
     const idle = this.decks[1 - this.active];
@@ -219,24 +224,25 @@ export class AudioEngine {
     }
   }
 
-  /** Annule le fondu en cours (seek, changement de mode, changement de piste). */
-  private disarm(): void {
-    if (!this.ctx) return;
-    const now = this.ctx.currentTime;
-    const out = this.decks[this.active];
-    out.gain.gain.cancelScheduledValues(now);
-    out.gain.gain.setValueAtTime(out.el.paused ? out.gain.gain.value : 1, now);
-    // Le tempo ajusté (beat-sync) ne doit pas survivre à la transition.
-    out.rate = 1;
-    out.el.playbackRate = 1;
-    const idle = this.decks[1 - this.active];
-    idle.gain.gain.cancelScheduledValues(now);
-    idle.gain.gain.setValueAtTime(0, now);
-    idle.rate = 1;
-    idle.el.playbackRate = 1;
-    this.armed = false;
-    this.fadePlan = null;
-  }
+    /** Annule le fondu en cours (seek, changement de mode, changement de piste). */
+    private disarm(): void {
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const out = this.decks[this.active];
+      out.gain.gain.cancelScheduledValues(now);
+      out.gain.gain.setValueAtTime(out.el.paused ? out.gain.gain.value : 1, now);
+      // Le tempo ajusté (beat-sync) ne doit pas survivre à la transition.
+      out.rate = 1;
+      out.el.playbackRate = 1;
+      const idle = this.decks[1 - this.active];
+      idle.gain.gain.cancelScheduledValues(now);
+      idle.gain.gain.setValueAtTime(0, now);
+      idle.rate = 1;
+      idle.el.playbackRate = 1;
+      this.armed = false;
+      this.fadePlan = null;
+      this.nextTransition = null;
+    }
 
   // -------------------------------------------------------------------- tick
 
@@ -319,9 +325,14 @@ export class AudioEngine {
     // Le fondu ne peut pas dépasser la durée restante du titre sortant,
     // sinon la piste sortirait du fondu et laisserait un trou de silence.
     const remaining = Math.max(0, (duration - position) / outgoing.rate);
-    const fadeDuration = Math.min(this.crossfadeSeconds, remaining);
+    const fadeDuration = resolveFadeDuration(
+      this.nextTransition,
+      this.crossfadeSeconds,
+      remaining,
+    );
     if (fadeDuration <= 0.05) {
       this.armed = false;
+      this.nextTransition = null;
       return;
     }
 
@@ -411,6 +422,13 @@ export class AudioEngine {
     deck.gain.gain.cancelScheduledValues(fadeStartAbs);
     deck.gain.gain.setValueAtTime(0, fadeStartAbs);
     deck.gain.gain.setValueCurveAtTime(fadeIn, fadeStartAbs, duration);
+
+    // Transition IA : pour un cut, on force la coupure immédiate du sortant
+    // (pas de fondu progressif). Pour les autres styles, on garde le fondu croisé.
+    if (this.nextTransition?.style === 'cut') {
+      outgoing.gain.gain.cancelScheduledValues(fadeStartAbs);
+      outgoing.gain.gain.setValueAtTime(0, fadeStartAbs);
+    }
   }
 
   private swapDecks(): void {
@@ -440,6 +458,7 @@ export class AudioEngine {
     this.nextTrack = null;
     this.nextUrl = '';
     this.nextLoaded = false;
+    this.nextTransition = null;
     this.anchorClock();
     this.events.onSwapped?.();
   }

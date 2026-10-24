@@ -55,6 +55,28 @@ export function equalPowerCurves(
   return { fadeIn, fadeOut };
 }
 
+/**
+ * Durée de fondu réellement appliquée :
+ *  - un `cut` est quasi instantané (0,08 s, juste de quoi éviter le clic) ;
+ *  - une durée proposée par l'IA est bornée à 1–16 s ;
+ *  - sinon on garde le réglage utilisateur.
+ * Dans tous les cas, jamais plus que ce qu'il reste à jouer.
+ */
+export function resolveFadeDuration(
+  transition: { style: string; duration: number } | null,
+  fallback: number,
+  remaining: number,
+): number {
+  const requested =
+    transition?.style === 'cut'
+      ? 0.08
+      : transition
+        ? Math.min(16, Math.max(1, Number(transition.duration) || 4))
+        : Math.max(0, fallback);
+
+  return Math.min(requested, Math.max(0, remaining));
+}
+
 export interface BeatSyncParams {
   /** Position média courante du titre sortant (s). */
   position: number;

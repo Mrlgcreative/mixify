@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { api } from '../api/musicApi';
 import { engine } from '../audio/engine';
 import { MAX_CROSSFADE_SECONDS, MIN_CROSSFADE_SECONDS } from '../audio/crossfade';
-import type { PlayerState, RepeatMode, Track } from '../types/music';
+import type { MixPlan, PlayerState, RepeatMode, Track } from '../types/music';
 
 /**
  * Store global du lecteur.
@@ -21,6 +21,11 @@ interface PlayerStore extends PlayerState {
   notice: string | null;
   /** Index du titre qui sera joué à la fin du titre courant. */
   pendingIndex: number | null;
+
+  /** Plan de mix IA (ordre + transitions) pour la file courante. */
+  mixPlan: MixPlan | null;
+  mixPlanKey: string | null;
+  mixPlanPending: boolean;
 
   playTrack: (track: Track | undefined, context?: Track[]) => Promise<void>;
   toggle: () => Promise<void>;
@@ -85,12 +90,39 @@ function pickNextIndex(
   return null;
 }
 
+function mixPlanKey(queue: Track[]): string | null {
+  if (queue.length < 2) return null;
+  return queue.map((track) => track.id).join(',');
+}
+
+async function fetchMixPlan(queue: Track[], set: any, get: any): Promise<void> {
+  const key = mixPlanKey(queue);
+  if (!key || get().mixPlanKey === key || get().mixPlanPending) return;
+
+  set({ mixPlanPending: true });
+  try {
+    const plan = await api.getMixPlan(queue.map((track) => track.id));
+    const current = mixPlanKey(get().queue);
+    if (current === key) {
+      set({ mixPlan: plan, mixPlanKey: key });
+    }
+  } catch {
+    // L'IA n'est pas dispo : on garde le mix local, sans blocage.
+    const current = mixPlanKey(get().queue);
+    if (current === key) {
+      set({ mixPlanKey: key });
+    }
+  } finally {
+    set({ mixPlanPending: false });
+  }
+}
+
 const initialSettings = loadSettings();
 
 export const usePlayer = create<PlayerStore>((set, get) => {
   /** Charge un titre et (re)prépare le suivant pour l'Auto-Mix. */
   const prepareNext = async (): Promise<void> => {
-    const { queue, currentIndex, shuffle, repeat } = get();
+    const { queue, currentIndex, shuffle, repeat, mixPlan } = get();
     if (queue.length === 0) {
       await engine.setNext(null, '');
       return;
@@ -102,28 +134,18 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       return;
     }
     const nextTrack = queue[nextIndex];
+    const currentTrack = queue[currentIndex];
+    const transition =
+      currentTrack && mixPlan?.transitions[`${currentTrack.id}->${nextTrack.id}`]
+        ? mixPlan.transitions[`${currentTrack.id}->${nextTrack.id}`]
+        : null;
     set({ pendingIndex: nextIndex });
     try {
       const url = await api.getStreamUrl(nextTrack);
-      await engine.setNext(nextTrack, url);
+      await engine.setNext(nextTrack, url, transition);
     } catch {
       await engine.setNext(null, '');
       set({ pendingIndex: null });
-    }
-  };
-
-  const load = async (track: Track, startAt = 0): Promise<void> => {
-    try {
-      const url = await api.getStreamUrl(track);
-      await engine.play(track, url, startAt);
-      set({ isPlaying: true, currentTrack: track, position: startAt, duration: track.duration });
-      void api.recordHistory(track);
-      void prepareNext();
-    } catch (error) {
-      set({
-        notice: error instanceof Error ? error.message : 'Impossible de lire ce titre',
-        isPlaying: false,
-      });
     }
   };
 
@@ -173,26 +195,34 @@ export const usePlayer = create<PlayerStore>((set, get) => {
     queueOpen: false,
     notice: null,
     pendingIndex: null,
+    mixPlan: null,
+    mixPlanKey: null,
+    mixPlanPending: false,
 
-    async playTrack(track, context) {
-      // `playlist.tracks[0]` ou `liked[0]` peut être vide selon l'API : sans
-      // ce garde-fou, la lecture d'une liste vide plante sur track.duration.
-      if (!track) return;
-      const state = get();
-      let queue = state.queue;
-      let index = state.queue.findIndex((t) => t.id === track.id);
+  async playTrack(track, context) {
+    // `playlist.tracks[0]` ou `liked[0]` peut être vide selon l'API : sans
+    // ce garde-fou, la lecture d'une liste vide plante sur track.duration.
+    if (!track) return;
+    const state = get();
+    let queue = state.queue;
+    let index = state.queue.findIndex((t) => t.id === track.id);
 
-      if (context && context.length > 0) {
-        queue = context;
-        index = queue.findIndex((t) => t.id === track.id);
-      } else if (index === -1) {
-        queue = [...state.queue, track];
-        index = queue.length - 1;
-      }
+    if (context && context.length > 0) {
+      queue = context;
+      index = queue.findIndex((t) => t.id === track.id);
+    } else if (index === -1) {
+      queue = [...state.queue, track];
+      index = queue.length - 1;
+    }
 
-      set({ queue, currentIndex: index, currentTrack: track });
-      await load(track, 0);
-    },
+    set({ queue, currentIndex: index, currentTrack: track });
+    await engine.play(track, await api.getStreamUrl(track), 0);
+    set({ isPlaying: true, position: 0, duration: track.duration });
+    void api.recordHistory(track);
+    set({ mixPlan: null, mixPlanKey: null });
+    void fetchMixPlan(queue, set, get);
+    void prepareNext();
+  },
 
     async toggle() {
       const { isPlaying, currentTrack } = get();
@@ -225,7 +255,10 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       }
       const track = queue[nextIndex];
       set({ currentIndex: nextIndex, currentTrack: track });
-      await load(track, 0);
+      await engine.play(track, await api.getStreamUrl(track), 0);
+      set({ isPlaying: true, position: 0, duration: track.duration });
+      void api.recordHistory(track);
+      void prepareNext();
     },
 
     async previous() {
@@ -240,7 +273,10 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       const track = queue[previousIndex];
       if (!track) return;
       set({ currentIndex: previousIndex, currentTrack: track });
-      await load(track, 0);
+      await engine.play(track, await api.getStreamUrl(track), 0);
+      set({ isPlaying: true, position: 0, duration: track.duration });
+      void api.recordHistory(track);
+      void prepareNext();
     },
 
     seek(seconds) {
@@ -303,7 +339,9 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       if (from < currentIndex && to >= currentIndex) index -= 1;
       else if (from > currentIndex && to <= currentIndex) index += 1;
 
-      set({ queue: next, currentIndex: index });
+      set({ queue: next, currentIndex: index, mixPlan: null, mixPlanKey: null });
+      void fetchMixPlan(next, set, get);
+      void prepareNext();
     },
 
     removeFromQueue(index) {
@@ -313,20 +351,28 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       set({
         queue: next,
         currentIndex: index < currentIndex ? currentIndex - 1 : currentIndex,
+        mixPlan: null,
+        mixPlanKey: null,
       });
+      void fetchMixPlan(next, set, get);
+      void prepareNext();
     },
 
     /** Vide la file en gardant le titre en cours. */
     clearQueue() {
       const { queue, currentTrack } = get();
       const remaining = currentTrack ? queue.filter((t) => t.id === currentTrack.id) : [];
-      set({ queue: remaining, currentIndex: remaining.length > 0 ? 0 : -1 });
+      set({ queue: remaining, currentIndex: remaining.length > 0 ? 0 : -1, mixPlan: null, mixPlanKey: null });
+      void prepareNext();
     },
 
     addToQueue(track) {
       const { queue } = get();
       if (queue.some((t) => t.id === track.id)) return;
-      set({ queue: [...queue, track] });
+      const next = [...queue, track];
+      set({ queue: next, mixPlan: null, mixPlanKey: null });
+      void fetchMixPlan(next, set, get);
+      void prepareNext();
     },
 
     clearNotice() {

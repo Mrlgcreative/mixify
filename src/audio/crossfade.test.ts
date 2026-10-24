@@ -1,3 +1,4 @@
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -8,6 +9,7 @@ import {
   barInterval,
   MIN_CROSSFADE_SECONDS,
   MAX_CROSSFADE_SECONDS,
+  resolveFadeDuration,
 } from './crossfade.ts';
 
 test('equalPowerCurves : puissance constante aux extrémités', () => {
@@ -212,4 +214,12 @@ test('planBeatSync : dégradation propre sans BPM entrant (sortant seul connu)',
 test('bornes du réglage crossfade', () => {
   assert.equal(MIN_CROSSFADE_SECONDS, 0);
   assert.equal(MAX_CROSSFADE_SECONDS, 12);
+});
+
+test('resolveFadeDuration : cut quasi instantané, IA bornée, jamais au-delà du restant', () => {
+  assert.equal(resolveFadeDuration({ style: 'cut', duration: 12 }, 8, 30), 0.08);
+  assert.equal(resolveFadeDuration({ style: 'blend', duration: 99 }, 8, 30), 16);
+  assert.equal(resolveFadeDuration({ style: 'bass_swap', duration: 0.5 }, 8, 30), 1);
+  assert.equal(resolveFadeDuration(null, 7, 30), 7);
+  assert.equal(resolveFadeDuration({ style: 'blend', duration: 10 }, 8, 3), 3);
 });

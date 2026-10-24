@@ -58,6 +58,21 @@ export interface ArtistStats {
   }>;
 }
 
+/** Transition recommandée par l'IA pour une paire de morceaux consécutifs. */
+export interface MixTransition {
+  style: 'blend' | 'bass_swap' | 'filter_sweep' | 'echo_out' | 'cut';
+  /** Durée du fondu en secondes (1–16 côté backend, ~0,08 pour un cut). */
+  duration: number;
+  tempoSync: boolean;
+  reason: string | null;
+}
+
+/** Plan de mix : ordre de passage + transition indexée par `from->to`. */
+export interface MixPlan {
+  order: string[];
+  transitions: Record<string, MixTransition>;
+}
+
 /** Champs modifiables du profil artiste. */
 export interface ArtistInput {
   name: string;
