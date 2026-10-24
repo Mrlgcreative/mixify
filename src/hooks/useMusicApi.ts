@@ -69,6 +69,23 @@ export function useSearch(query: string): AsyncState<SearchResults> {
   return state;
 }
 
+/** Suggestions rapides pour l'autocomplétion (déclenchées par `query` avec debounce). */
+export function useSearchSuggestions(query: string, delay = 200): AsyncState<SearchResults> {
+  const [debounced, setDebounced] = useState(query);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query), delay);
+    return () => clearTimeout(timer);
+  }, [query, delay]);
+
+  const enabled = debounced.trim().length >= 2;
+  const state = useAsync(
+    async () =>
+      enabled ? api.search(debounced) : { tracks: [], albums: [], artists: [], playlists: [] },
+    [debounced, enabled],
+  );
+  return state;
+}
+
 /** Détail d'une playlist. */
 export function usePlaylist(id: string | null): AsyncState<Playlist> {
   const playlistRevision = useLibraryStore((state) => state.playlistRevision);
