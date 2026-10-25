@@ -20,7 +20,8 @@ import { Cover } from '../components/common/Cover';
 import { MediaCard } from '../components/common/MediaCard';
 import { TrackList } from '../components/common/TrackList';
 import { FollowButton } from '../components/Follow/FollowButton';
-import { AccentSettings } from '../components/settings/AccentSettings';
+import { AccentSettings, SimpleModeToggle } from '../components/settings/AccentSettings';
+import { DataSaverSettings } from '../components/settings/DataSaverSettings';
 import { useHistory, useLibrary, type AsyncState } from '../hooks/useMusicApi';
 import { useAuthStore } from '../store/authStore';
 import { useFollows } from '../store/followsStore';
@@ -355,6 +356,12 @@ function SettingsTab() {
         <CrossfadeSettings />
         <div className="border-t border-line">
           <AccentSettings />
+        </div>
+        <div className="border-t border-line">
+          <SimpleModeToggle />
+        </div>
+        <div className="border-t border-line">
+          <DataSaverSettings />
         </div>
       </section>
 

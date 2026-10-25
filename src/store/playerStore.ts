@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { api } from '../api/musicApi';
 import { engine } from '../audio/engine';
+import { offlineUrl } from '../audio/offline';
 import { MAX_CROSSFADE_SECONDS, MIN_CROSSFADE_SECONDS } from '../audio/crossfade';
 import type { MixPlan, PlayerState, RepeatMode, Track } from '../types/music';
 
@@ -173,6 +174,11 @@ async function fetchMixPlan(queue: Track[], set: any, get: any): Promise<void> {
 
 const initialSettings = loadSettings();
 
+/** Flux local si le titre est téléchargé, sinon URL réseau. */
+async function resolveStreamUrl(track: Track): Promise<string> {
+  return (await offlineUrl(track.id)) ?? api.getStreamUrl(track);
+}
+
 export const usePlayer = create<PlayerStore>((set, get) => {
   /** Charge un titre et (re)prépare le suivant pour l'Auto-Mix. */
   const prepareNext = async (): Promise<void> => {
@@ -195,7 +201,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
         : null;
     set({ pendingIndex: nextIndex });
     try {
-      const url = await api.getStreamUrl(nextTrack);
+      const url = await resolveStreamUrl(nextTrack);
       await engine.setNext(nextTrack, url, transition);
     } catch {
       await engine.setNext(null, '');
@@ -298,7 +304,9 @@ export const usePlayer = create<PlayerStore>((set, get) => {
     let index = state.queue.findIndex((t) => t.id === track.id);
 
     if (context && context.length > 0) {
-      queue = context;
+      // Un même titre peut apparaître dans plusieurs rayons (accueil) : la
+      // file est indexée par id, on retire les doublons en gardant l'ordre.
+      queue = [...new Map(context.map((t) => [t.id, t])).values()];
       index = queue.findIndex((t) => t.id === track.id);
     } else if (index === -1) {
       queue = [...state.queue, track];
@@ -306,7 +314,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
     }
 
     set({ queue, currentIndex: index, currentTrack: track });
-    await engine.play(track, await api.getStreamUrl(track), 0);
+    await engine.play(track, await resolveStreamUrl(track), 0);
     set({ isPlaying: true, position: 0, duration: track.duration });
     setMediaMetadata(track);
     setMediaPlaybackState('playing');
@@ -356,7 +364,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       }
       const track = queue[nextIndex];
       set({ currentIndex: nextIndex, currentTrack: track });
-      await engine.play(track, await api.getStreamUrl(track), 0);
+      await engine.play(track, await resolveStreamUrl(track), 0);
       set({ isPlaying: true, position: 0, duration: track.duration });
       setMediaMetadata(track);
       setMediaPlaybackState('playing');
@@ -377,7 +385,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       const track = queue[previousIndex];
       if (!track) return;
       set({ currentIndex: previousIndex, currentTrack: track });
-      await engine.play(track, await api.getStreamUrl(track), 0);
+      await engine.play(track, await resolveStreamUrl(track), 0);
       set({ isPlaying: true, position: 0, duration: track.duration });
       setMediaMetadata(track);
       setMediaPlaybackState('playing');

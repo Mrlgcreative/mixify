@@ -228,6 +228,7 @@ function toArtist(raw: ApiArtist): Artist {
           .filter(Boolean)
       : undefined,
     followers: raw.followers_count ?? undefined,
+    country: raw.country ?? undefined,
   };
 }
 
@@ -423,10 +424,66 @@ class MixifyApi implements MusicApi {
     ]);
 
     const mappedTracks = tracks.map(toTrack);
+    const mappedArtists = artists.map(toArtist);
     const withTempo = mappedTracks.filter((track) => track.bpm);
     const hour = new Date().getHours();
 
-    const shelves: Shelf[] = [
+    // Scène locale : artistes de Kolwezi / RDC (pays ou genres renseignés).
+    const localArtists = mappedArtists.filter((artist) =>
+      /kolwezi|rdc|congo|lualaba/i.test(
+        `${artist.country ?? ''} ${(artist.genres ?? []).join(' ')}`,
+      ),
+    );
+    const localIds = new Set(localArtists.map((artist) => artist.id));
+    const localTracks = mappedTracks.filter((track) => localIds.has(track.artist.id));
+
+    const shelves: Shelf[] = [];
+    if (localArtists.length > 0) {
+      shelves.push({
+        id: 'kolwezi',
+        title: 'Scène de Kolwezi',
+        subtitle: 'Les voix et les pochettes de la région',
+        items: [...localTracks, ...localArtists],
+      });
+    }
+
+    // Genres locaux mis en avant : rumba, ndombolo, gospel, amapiano, rap.
+    const localGenres = [
+      { id: 'rumba', title: 'Rumba congolaise', subtitle: 'Guitares et voix de la RDC', pattern: /rumba/i },
+      { id: 'ndombolo', title: 'Ndombolo', subtitle: 'Le rythme qui fait danser Kolwezi', pattern: /ndombolo/i },
+      { id: 'gospel', title: 'Gospel', subtitle: 'Louange et espoir', pattern: /gospel/i },
+      { id: 'amapiano', title: 'Amapiano', subtitle: 'Log drums et nuits chaudes', pattern: /amapiano/i },
+      { id: 'rap', title: 'Rap congolais', subtitle: 'Les nouvelles plumes de Kolwezi', pattern: /\brap\b/i },
+    ];
+    for (const genre of localGenres) {
+      const genreTracks = mappedTracks.filter((track) => genre.pattern.test(track.genre ?? ''));
+      const genreArtists = mappedArtists.filter((artist) =>
+        (artist.genres ?? []).some((value) => genre.pattern.test(value)),
+      );
+      if (genreTracks.length > 0 || genreArtists.length > 0) {
+        shelves.push({
+          id: genre.id,
+          title: genre.title,
+          subtitle: genre.subtitle,
+          items: [...genreTracks, ...genreArtists],
+        });
+      }
+    }
+
+    // Émergents : artistes locaux encore peu suivis, du plus petit au plus grand.
+    const emerging = localArtists
+      .filter((artist) => (artist.followers ?? 0) < 1000)
+      .sort((a, b) => (a.followers ?? 0) - (b.followers ?? 0));
+    if (emerging.length > 0) {
+      shelves.push({
+        id: 'emergents',
+        title: 'Artistes émergents de Kolwezi',
+        subtitle: 'Les nouveaux talents à suivre',
+        items: emerging,
+      });
+    }
+
+    shelves.push(
       {
         id: 'nouveautes',
         title: 'Nouveautés',
@@ -443,9 +500,9 @@ class MixifyApi implements MusicApi {
         id: 'artistes',
         title: 'Artistes',
         subtitle: 'Les profils du catalogue',
-        items: artists.map(toArtist),
+        items: mappedArtists,
       },
-    ];
+    );
     if (playlists.length > 0) {
       shelves.push({
         id: 'playlists',

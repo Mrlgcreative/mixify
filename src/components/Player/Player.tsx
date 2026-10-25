@@ -36,9 +36,14 @@ export function Player() {
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
   const [fullPlayerOpen, setFullPlayerOpen] = useState(false);
 
+  // Le mini-lecteur n'apparaît qu'une fois un titre lancé.
+  if (!currentTrack) return null;
+
   return (
     <>
-      <footer className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] left-0 right-0 z-30 flex h-[72px] shrink-0 items-center gap-2 border-t border-line bg-panel/95 px-3 backdrop-blur-xl md:relative md:bottom-auto md:z-auto md:h-[88px] md:gap-4 md:px-4 md:bg-panel md:backdrop-blur-none">
+      <footer
+        className="glass fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-2 right-2 z-30 flex h-[72px] shrink-0 items-center gap-2 rounded-[22px] px-3 md:relative md:bottom-auto md:left-auto md:right-auto md:z-auto md:mx-2 md:mb-2 md:h-[88px] md:gap-4 md:rounded-[24px] md:px-4"
+      >
         {/* Pochette + métadonnées */}
         <button
           type="button"
@@ -51,7 +56,7 @@ export function Player() {
             imageUrl={currentTrack?.album?.coverUrl}
             className="h-12 w-12 shrink-0 md:h-14 md:w-14"
           />
-          <div className="min-w-0">
+          <div className="min-w-0" style={{ textShadow: '0 1px 4px rgb(0 0 0 / 0.6)' }}>
             <p className="truncate text-[13px] font-semibold text-white md:text-sm">
               {currentTrack?.title ?? 'Aucun titre'}
             </p>
@@ -83,9 +88,9 @@ export function Player() {
             type="button"
             onClick={() => void toggle()}
             aria-label={isPlaying ? 'Pause' : 'Lecture'}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition hover:scale-105"
+            className="glass-play flex h-10 w-10 items-center justify-center rounded-full text-primary-contrast transition hover:scale-105 active:scale-95"
           >
-            {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+            {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
           </button>
           <button
             type="button"

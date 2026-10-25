@@ -3,8 +3,8 @@
  * Les valeurs sont converties en variables CSS (`--primary`, `--bg`, ...) puis
  * consommées par Tailwind (voir tailwind.config.ts) et par les composants.
  *
- * Pour changer la couleur primaire (le vert #1DB954), il suffit de modifier
- * `theme.colors.primary` : l'UI se met à jour à chaud, sans rebuild.
+ * Pour changer la couleur primaire (l'or Congo #F3C24B par défaut), il suffit
+ * de modifier `theme.colors.primary` : l'UI se met à jour à chaud, sans rebuild.
  */
 
 export interface ThemeColors {
@@ -41,31 +41,32 @@ export interface Theme {
 
 export const theme: Theme = {
   colors: {
-    primary: '#1DB954',
-    primaryContrast: '#04140A',
-    bg: '#0A0A0A',
-    panel: '#121212',
-    card: '#181818',
-    elevated: '#242424',
-    line: '#2A2A2A',
-    subtle: '#B3B3B3',
+    // Or du drapeau congolais : chaleureux, lisible sur fond sombre.
+    primary: '#F3C24B',
+    primaryContrast: '#1A1204',
+    bg: '#0A0A0B',
+    panel: '#111113',
+    card: '#17171A',
+    elevated: '#232327',
+    line: '#2D2D32',
+    subtle: '#C7C7CC',
     text: '#FFFFFF',
-    muted: '#8A8A8A',
-    danger: '#F2545B',
+    muted: '#8E8E93',
+    danger: '#E5484D',
   },
-  radius: { card: 8, panel: 12 },
+  radius: { card: 10, panel: 16 },
   fonts: { sans: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
   logo: { wordmark: 'Mixify' },
 };
 
-/** Palette de reciproches proposée dans les réglages (accent color). */
+/** Palette de couleurs d'accent proposée dans les réglages. */
 export const accentPresets: Array<{ name: string; value: string }> = [
-  { name: 'Vert Mixify', value: '#1DB954' },
+  { name: 'Or Congo', value: '#F3C24B' },
+  { name: 'Bleu ciel Congo', value: '#38A3E0' },
+  { name: 'Rouge Congo', value: '#E5484D' },
   { name: 'Rose Apple Music', value: '#FA243C' },
-  { name: 'Violet', value: '#8B5CF6' },
-  { name: 'Cyan', value: '#22D3EE' },
-  { name: 'Orange', value: '#F97316' },
-  { name: 'Jaune', value: '#FACC15' },
+  { name: 'Vert', value: '#34C759' },
+  { name: 'Violet', value: '#AF52DE' },
 ];
 
 const ACCENT_KEY = 'mixify.accent';
@@ -79,7 +80,7 @@ export function getAccent(): string {
   }
 }
 
-/** Change la couleur primaire à chaud (ex. remplacer le vert #1DB954). */
+/** Change la couleur primaire à chaud (ex. remplacer l'or #F3C24B). */
 export function setAccent(color: string): void {
   try {
     localStorage.setItem(ACCENT_KEY, color);
@@ -120,4 +121,36 @@ export function applyTheme(next: Theme = theme, root: HTMLElement = document.doc
 
 function kebab(value: string): string {
   return value.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+// --------------------------------------------------------------- mode simple
+
+const SIMPLE_KEY = 'mixify.simple';
+
+/**
+ * Mode simple : fonds unis, aucun flou ni animation. Pour les téléphones
+ * d'entrée de gamme et les connexions lentes (le verre et les animations
+ * coûtent cher au GPU).
+ */
+export function getSimpleMode(): boolean {
+  try {
+    return localStorage.getItem(SIMPLE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Écrit le mode simple sur <html> : le CSS (`html.simple`) fait le reste. */
+export function applySimpleMode(enabled: boolean, root: HTMLElement = document.documentElement): void {
+  root.classList.toggle('simple', enabled);
+}
+
+/** Active/désactive le mode simple (persisté). */
+export function setSimpleMode(enabled: boolean): void {
+  try {
+    localStorage.setItem(SIMPLE_KEY, enabled ? '1' : '0');
+  } catch {
+    /* stockage indisponible : le choix ne survivra pas au rechargement */
+  }
+  applySimpleMode(enabled);
 }

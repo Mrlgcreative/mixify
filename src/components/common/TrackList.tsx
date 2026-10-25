@@ -1,7 +1,8 @@
-import type { DragEvent, ReactNode } from 'react';
-import { GripVertical, Heart, ListPlus, Pause, Play, Trash2 } from 'lucide-react';
+import { useState, type DragEvent, type ReactNode } from 'react';
+import { Check, Download, GripVertical, Heart, ListPlus, Loader2, Pause, Play, Trash2 } from 'lucide-react';
 
 import { Cover } from './Cover';
+import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { useLibraryStore } from '../../store/libraryStore';
 import { usePlayer } from '../../store/playerStore';
 import type { Track } from '../../types/music';
@@ -47,6 +48,24 @@ export function TrackList({
   const favorites = useLibraryStore((s) => s.favorites);
   const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
 
+  const [savedIds, setSavedIds] = useState<string[]>(() => listDownloads().map((entry) => entry.track.id));
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const toggleDownload = async (track: Track) => {
+    setDownloadError(null);
+    setBusyId(track.id);
+    try {
+      if (savedIds.includes(track.id)) await removeDownload(track.id);
+      else await downloadTrack(track);
+      setSavedIds(listDownloads().map((entry) => entry.track.id));
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Téléchargement impossible.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const onDragStart = (index: number) => (event: DragEvent) => {
     event.dataTransfer.setData('text/plain', String(index));
     event.dataTransfer.effectAllowed = 'move';
@@ -60,10 +79,12 @@ export function TrackList({
   };
 
   return (
+    <>
     <ul className="flex flex-col">
       {tracks.map((track, index) => {
         const isCurrent = highlightCurrent && currentTrack?.id === track.id;
         const liked = Boolean(favorites[track.id]);
+        const downloaded = savedIds.includes(track.id);
         return (
           <li
             key={track.id}
@@ -130,6 +151,32 @@ export function TrackList({
                   <Heart size={15} fill={liked ? 'currentColor' : 'none'} />
                 </button>
               )}
+              {!sortable && (
+                <button
+                  type="button"
+                  onClick={() => void toggleDownload(track)}
+                  disabled={busyId === track.id}
+                  title={downloaded ? 'Supprimer le téléchargement' : 'Télécharger pour l’écoute hors ligne'}
+                  aria-label={
+                    downloaded
+                      ? `Supprimer ${track.title} des téléchargements`
+                      : `Télécharger ${track.title} pour l’écoute hors ligne`
+                  }
+                  className={
+                    downloaded
+                      ? 'text-primary'
+                      : 'opacity-100 transition hover:text-white sm:opacity-0 sm:group-hover:opacity-100'
+                  }
+                >
+                  {busyId === track.id ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : downloaded ? (
+                    <Check size={15} />
+                  ) : (
+                    <Download size={15} />
+                  )}
+                </button>
+              )}
               <span className="tabular-nums">{formatTime(track.duration)}</span>
               {renderActions?.(track)}
               {sortable ? (
@@ -172,5 +219,7 @@ export function TrackList({
         );
       })}
     </ul>
+    {downloadError && <p className="px-2 py-2 text-xs text-danger">{downloadError}</p>}
+    </>
   );
 }

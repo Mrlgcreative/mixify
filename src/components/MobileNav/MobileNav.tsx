@@ -23,10 +23,10 @@ export function MobileNav({ view, onNavigate }: MobileNavProps) {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center border-t border-white/10 bg-panel/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+    <div className="fixed inset-x-2 bottom-[calc(8px+env(safe-area-inset-bottom))] z-40 flex justify-center md:hidden">
       <nav
         aria-label="Navigation principale"
-        className="flex w-full max-w-[420px] items-center justify-between px-1 py-1"
+        className="glass flex w-full max-w-[420px] items-center justify-between rounded-[22px] px-1.5 py-1.5"
       >
         {items.map((item) => {
           const Icon = item.icon;
@@ -38,7 +38,7 @@ export function MobileNav({ view, onNavigate }: MobileNavProps) {
               onClick={() => onNavigate(item.view)}
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-medium transition ${
-                active ? 'bg-white/10 text-primary' : 'text-muted hover:text-white'
+                active ? 'bg-elevated text-primary' : 'text-muted hover:text-white'
               }`}
             >
               <Icon size={19} />

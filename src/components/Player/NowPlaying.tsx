@@ -87,14 +87,14 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-[#050510] md:hidden">
+    <div className="fixed inset-0 z-[70] flex flex-col bg-bg md:hidden">
       <div
         className="absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse at top, rgba(168,85,247,0.35) 0%, rgba(59,7,100,0.25) 35%, transparent 70%)`,
+          background: `radial-gradient(ellipse at top, rgb(var(--primary) / 0.22) 0%, rgb(var(--primary) / 0.08) 35%, transparent 70%)`,
         }}
       />
-      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-purple-500/10 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-primary/10 to-transparent" />
 
       <header className="relative z-10 flex items-center justify-between px-4 pb-2 pt-[calc(env(safe-area-inset-top)+10px)]">
         <button
@@ -121,12 +121,12 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
       <main className="relative z-10 flex flex-1 flex-col items-center justify-between px-6 pb-8 pt-6">
         <div className="flex w-full flex-1 items-center justify-center">
           <div className="relative w-full max-w-[340px]">
-            <div className="absolute -inset-6 rounded-[40px] bg-purple-500/20 blur-3xl" />
+            <div className="absolute -inset-6 rounded-[40px] bg-primary/20 blur-3xl" />
             <Cover
               seed={currentTrack.id}
               title={currentTrack.title}
               imageUrl={currentTrack.album?.coverUrl}
-              className="relative aspect-square w-full rounded-[28px] shadow-[0_80px_160px_rgba(139,92,246,0.35)]"
+              className="relative aspect-square w-full rounded-[28px] shadow-[0_60px_140px_rgba(0,0,0,0.7)]"
             />
           </div>
         </div>
@@ -228,7 +228,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               type="button"
               onClick={() => void toggle()}
               aria-label={isPlaying ? 'Pause' : 'Lecture'}
-              className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-black shadow-[0_40px_80px_rgba(255,255,255,0.18)] transition hover:scale-105 active:scale-95"
+              className="glass-play flex h-20 w-20 items-center justify-center rounded-full text-primary-contrast transition hover:scale-105 active:scale-95"
             >
               {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
             </button>
@@ -262,7 +262,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setShowLyricsSheet(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 flex h-[85vh] flex-col rounded-t-[32px] bg-gradient-to-b from-[#2a1745] via-[#120a24] to-[#050510] shadow-[0_-60px_160px_rgba(139,92,246,0.35)]">
+          <div className="absolute inset-x-0 bottom-0 flex h-[85vh] flex-col rounded-t-[32px] bg-gradient-to-b from-card via-panel to-bg shadow-[0_-60px_160px_rgba(0,0,0,0.65)]">
             <div className="flex items-center justify-center pt-3">
               <div className="h-1 w-10 rounded-full bg-white/30" />
             </div>

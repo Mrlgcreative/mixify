@@ -29,6 +29,27 @@ interface AuthStore {
 /** Une seule reprise de session, même si l'effet est rejoué (StrictMode). */
 let initPromise: Promise<void> | null = null;
 
+const USER_KEY = 'mixify.user';
+
+/** Dernier profil connu : permet de rouvrir l'app hors ligne sans repasser par la connexion. */
+function readCachedUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(user: AuthUser | null): void {
+  try {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_KEY);
+  } catch {
+    /* stockage indisponible : l'app redemandera la connexion hors ligne */
+  }
+}
+
 /** Session du front : token Bearer conservé en localStorage, utilisateur relu via /api/auth/me. */
 export const useAuthStore = create<AuthStore>((set) => ({
   user: null,
@@ -52,10 +73,17 @@ export const useAuthStore = create<AuthStore>((set) => ({
       try {
         const { user } = await meRequest();
         set({ user });
+        writeCachedUser(user);
       } catch (error) {
         // Jeton expiré ou révoqué uniquement : une panne réseau garde la session.
-        if (error instanceof ApiError && error.status === 401) setToken(null);
-        set({ user: null });
+        if (error instanceof ApiError && error.status === 401) {
+          setToken(null);
+          writeCachedUser(null);
+          set({ user: null });
+        } else {
+          // Hors ligne : on rouvre avec le dernier profil connu.
+          set({ user: readCachedUser() });
+        }
       } finally {
         set({ ready: true });
       }
@@ -68,6 +96,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       const { token, user } = await loginRequest(email, password, role);
       setToken(token);
+      writeCachedUser(user);
       set({ user });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Connexion impossible' });
@@ -82,6 +111,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       const { token, user } = await registerRequest(input);
       setToken(token);
+      writeCachedUser(user);
       set({ user });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Inscription impossible' });
@@ -93,10 +123,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   logout() {
     setToken(null);
+    writeCachedUser(null);
     set({ user: null, error: null });
   },
 
   setUser(user) {
+    writeCachedUser(user);
     set({ user });
   },
 

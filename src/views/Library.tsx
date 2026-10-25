@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ChevronLeft, Heart, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 
 import { api } from '../api/musicApi';
+import { listDownloads, onDownloadsChange } from '../audio/offline';
 import { MediaCard } from '../components/common/MediaCard';
 import { Skeleton, SkeletonCard } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
@@ -20,6 +21,42 @@ function message(error: unknown, fallback: string): string {
 /** Bibliothèque : favoris, playlists et accès au détail d'une playlist. */
 export function LibraryView({ onSelect }: LibraryViewProps) {
   return <LibraryMain onSelect={onSelect} />;
+}
+
+/** Titres téléchargés : accessibles même sans réseau (y compris après rechargement). */
+function OfflineSection() {
+  const [tracks, setTracks] = useState(() => listDownloads().map((entry) => entry.track));
+  const playTrack = usePlayer((s) => s.playTrack);
+
+  useEffect(
+    () => onDownloadsChange(() => setTracks(listDownloads().map((entry) => entry.track))),
+    [],
+  );
+
+  if (tracks.length === 0) return null;
+
+  return (
+    <section className="mb-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-white">Hors ligne</h2>
+          <p className="text-sm text-muted">
+            {tracks.length} titre(s) téléchargé(s) · lecture sans connexion
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void playTrack(tracks[0], tracks)}
+          className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-primary-contrast transition hover:scale-105"
+        >
+          <Play size={16} fill="currentColor" /> Écouter
+        </button>
+      </div>
+      <div className="mt-4">
+        <TrackList tracks={tracks} />
+      </div>
+    </section>
+  );
 }
 
 function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
@@ -78,11 +115,18 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
   }
 
   if (error || !data) {
-    return <p className="p-6 text-sm text-danger">Bibliothèque indisponible : {error}</p>;
+    return (
+      <div className="px-4 py-6 md:px-6">
+        <OfflineSection />
+        <p className="text-sm text-danger">Bibliothèque indisponible : {error}</p>
+      </div>
+    );
   }
 
   return (
     <div className="px-4 py-6 md:px-6">
+      <OfflineSection />
+
       <section className="mb-10">
         <div className="flex items-end justify-between gap-4">
           <div>

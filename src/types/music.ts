@@ -10,6 +10,8 @@ export interface Artist {
   imageUrl?: string;
   genres?: string[];
   followers?: number;
+  /** Pays ou ville déclarés (ex. « Kolwezi, RDC »). */
+  country?: string;
 }
 
 /** Profil artiste complet (espace artiste : édition, bannière, bio…). */

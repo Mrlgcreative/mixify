@@ -53,6 +53,7 @@ export default function App() {
     }
   });
   const queueOpen = usePlayer((s) => s.queueOpen);
+  const hasTrack = usePlayer((s) => Boolean(s.currentTrack));
   const user = useAuthStore((s) => s.user);
   const authReady = useAuthStore((s) => s.ready);
   const initAuth = useAuthStore((s) => s.init);
@@ -185,7 +186,14 @@ export default function App() {
           onSelectPlaylist={openPlaylist}
         />
 
-        <main className="bg-grid flex min-w-0 flex-1 flex-col overflow-hidden bg-panel pb-[calc(72px+56px+env(safe-area-inset-bottom))] md:rounded-panel md:pb-0">
+        {/* Mobile : transparent, le quadrillage du fond (racine) reste visible. */}
+        <main
+          className={`flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-panel md:bg-grid md:bg-panel md:pb-0 ${
+            hasTrack
+              ? 'pb-[calc(72px+64px+env(safe-area-inset-bottom)+16px)]'
+              : 'pb-[calc(64px+env(safe-area-inset-bottom)+12px)]'
+          }`}
+        >
           <Header
             view={playlistRoute ? 'library' : view}
             canGoBack={playlistRoute ? true : nav.cursor > 0}

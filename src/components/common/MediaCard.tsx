@@ -37,8 +37,8 @@ export function MediaCard({
           onSelect();
         }
       }}
-      className={`group relative shrink-0 rounded-card bg-card transition hover:bg-elevated ${
-        shape === 'circle' ? 'w-[160px] p-2' : 'w-[180px] p-3'
+      className={`group relative shrink-0 transition ${
+        shape === 'circle' ? 'w-[148px] sm:w-[164px]' : 'w-[152px] sm:w-[176px] lg:w-[196px]'
       } ${onSelect ? 'cursor-pointer' : ''}`}
     >
       <div className="relative flex justify-center">
@@ -46,7 +46,7 @@ export function MediaCard({
           seed={seed}
           title={title}
           rounded={shape === 'circle' ? 'full' : 'card'}
-          className={shape === 'circle' ? 'h-[144px] w-[144px]' : 'aspect-square w-full'}
+          className="aspect-square w-full transition-transform duration-300 group-hover:scale-[1.03]"
           imageUrl={imageUrl}
         />
         {onPlay && (
@@ -57,7 +57,7 @@ export function MediaCard({
               onPlay();
             }}
             aria-label={`${playing ? 'Pause' : 'Lecture'} : ${title}`}
-            className="absolute bottom-2 right-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-black opacity-0 shadow-glow transition group-hover:opacity-100 hover:scale-105"
+            className="glass-play absolute bottom-2 right-2 flex h-10 w-10 items-center justify-center rounded-full text-primary-contrast opacity-100 transition hover:scale-105 active:scale-95 sm:opacity-0 sm:group-hover:opacity-100"
           >
             {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
           </button>

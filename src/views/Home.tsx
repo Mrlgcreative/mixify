@@ -94,7 +94,7 @@ function Shortcut({ track, queue }: { track: Track; queue: Track[] }) {
     <button
       type="button"
       onClick={() => (active ? void toggle() : void playTrack(track, queue))}
-      className="group flex items-center gap-2 overflow-hidden rounded-card bg-white/10 pr-2 text-left transition hover:bg-white/20 sm:gap-3 sm:pr-3"
+      className="group flex items-center gap-2 overflow-hidden rounded-card bg-white/[0.06] pr-2 text-left transition hover:bg-white/[0.12] sm:gap-3 sm:pr-3"
     >
       <Cover seed={track.id} title={track.title} className="h-10 w-10 shrink-0 text-xs sm:h-12 sm:w-12 sm:text-sm" />
       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-white sm:text-sm">
@@ -152,9 +152,10 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
     return <p className="p-6 text-sm text-danger">Impossible de charger l'accueil : {error}</p>;
   }
 
-  const firstShelf = data.shelves[0];
-  const heroTracks = firstShelf?.items.filter(isTrack) ?? [];
-  const hero = heroTracks[0];
+  const localShelf = data.shelves.find((shelf) => shelf.id === 'kolwezi');
+  const heroTracks = data.shelves.flatMap((shelf) => shelf.items.filter(isTrack));
+  const localHero = localShelf?.items.filter(isTrack)[0];
+  const hero = localHero ?? heroTracks[0];
 
   // Raccourcis : les six premiers titres du catalogue publié.
   const catalog = data.shelves.find((shelf) => shelf.id === 'nouveautes')?.items ?? [];
@@ -168,12 +169,13 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
   const shortcuts = [...catalogTracks]
     .sort((a, b) => (historyCounts.get(b.id) ?? 0) - (historyCounts.get(a.id) ?? 0))
     .slice(0, 6);
-  const otherShelves = data.shelves.filter((shelf) => shelf !== firstShelf);
+  const otherShelves = data.shelves;
 
   return (
     <div className="px-4 pb-10 md:px-6">
       <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
         {greeting}
+        {greeting && user?.name ? `, ${user.name.split(' ')[0]}` : ''}
       </h2>
 
       {shortcuts.length > 0 && (
@@ -184,36 +186,42 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
         </section>
       )}
 
-      {/* Bannière du mix du jour */}
-      <section className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/35 via-elevated to-panel p-5 md:p-8">
-        <div className="relative flex flex-wrap items-center gap-6">
+      {/* À la une : grande pochette, l'interface s'efface devant le titre. */}
+      <section className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/20 via-card to-panel p-5 md:p-8">
+        <div className="relative flex flex-wrap items-end gap-6">
           <Cover
             seed={hero?.id ?? 'mixify'}
             title={hero?.title ?? 'Mixify'}
+            imageUrl={hero?.album?.coverUrl}
             rounded="panel"
-            className="hidden h-32 w-32 text-2xl shadow-card md:flex"
+            className="h-40 w-40 text-3xl shadow-card md:h-52 md:w-52"
           />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
-              {greeting} · mix du jour
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              {localHero ? 'Scène de Kolwezi' : 'À la une'}
             </p>
-            <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-4xl">
-              Ton mix du jour est prêt
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-white md:text-5xl">
+              {hero?.title ?? 'Ton mix du jour est prêt'}
             </h2>
-            <p className="mt-2 max-w-md text-sm text-white/70">
+            <p className="mt-2 max-w-md text-sm text-subtle">
+              {hero
+                ? `${hero.artist.name}${hero.album?.title ? ` — ${hero.album.title}` : ''}`
+                : 'Les artistes de Kolwezi et du Congo, réunis sur Mixify.'}
+            </p>
+            <p className="mt-1 max-w-md text-xs text-muted">
               Enchaînement automatique, tempo aligné, transitions sans couture.
             </p>
             <button
               type="button"
               onClick={() => hero && void playTrack(hero, heroTracks)}
               disabled={!hero}
-              className="mt-5 flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-black transition enabled:hover:scale-105 disabled:opacity-40"
+              className="mt-5 flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-contrast transition enabled:hover:scale-[1.02] disabled:opacity-40"
             >
-              <Play size={16} fill="currentColor" /> Lancer le mix
+              <Play size={16} fill="currentColor" /> Écouter le mix
             </button>
           </div>
         </div>
-        <div className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 rounded-full bg-primary/30 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
       </section>
 
       <div className="mt-8">

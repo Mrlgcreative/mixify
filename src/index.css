@@ -8,19 +8,19 @@
  * ces variables, pas les composants.
  */
 :root {
-  --primary: 29 185 84;
-  --primary-contrast: 4 20 10;
-  --bg: 10 10 10;
-  --panel: 18 18 18;
-  --card: 24 24 24;
-  --elevated: 36 36 36;
-  --line: 42 42 42;
-  --subtle: 179 179 179;
+  --primary: 243 194 75;
+  --primary-contrast: 26 18 4;
+  --bg: 10 10 11;
+  --panel: 17 17 19;
+  --card: 23 23 26;
+  --elevated: 35 35 39;
+  --line: 45 45 50;
+  --subtle: 199 199 204;
   --text: 255 255 255;
-  --muted: 138 138 138;
-  --danger: 242 84 91;
-  --radius-card: 8px;
-  --radius-panel: 12px;
+  --muted: 142 142 147;
+  --danger: 229 72 77;
+  --radius-card: 10px;
+  --radius-panel: 16px;
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -38,12 +38,111 @@ body {
 }
 
 @layer utilities {
-  /* Quadrillage discret du fond (suit la couleur de thème). */
+  /*
+   * Fond d'ambiance : quadrillage discret + deux halos très doux inspirés du
+   * ciel et de l'or congolais. L'interface s'efface devant les pochettes
+   * (principe de déférence d'Apple).
+   */
   .bg-grid {
     background-image:
-      linear-gradient(rgb(var(--line) / 0.4) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(var(--line) / 0.4) 1px, transparent 1px);
-    background-size: 48px 48px;
+      linear-gradient(rgb(var(--line) / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--line) / 0.35) 1px, transparent 1px),
+      radial-gradient(110% 70% at 12% -8%, rgb(var(--primary) / 0.12), transparent 62%),
+      radial-gradient(90% 60% at 100% 0%, rgb(56 163 224 / 0.09), transparent 58%);
+    background-size:
+      64px 64px,
+      64px 64px,
+      auto,
+      auto;
+    /* Pas de `background-attachment: fixed` : bug de rendu sur mobile. */
+    background-repeat: repeat;
+  }
+
+  /*
+   * Barres flottantes et boutons de lecture : flou du contenu derrière
+   * (verre dépoli), sans réfraction. Plus léger que le filtre SVG et rendu
+   * de la même façon sur tous les navigateurs.
+   */
+  .glass,
+  .glass-play {
+    background-color: rgb(var(--panel) / 0.55);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    box-shadow:
+      0 18px 50px rgb(0 0 0 / 0.45),
+      0 2px 10px rgb(0 0 0 / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.14);
+  }
+
+  .glass-play {
+    background-color: rgb(var(--primary) / 0.9);
+    border-color: rgb(255 255 255 / 0.22);
+    box-shadow:
+      0 8px 24px rgb(var(--primary) / 0.3),
+      0 2px 8px rgb(0 0 0 / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.35);
+  }
+
+  /* Mode simple : fonds unis, pas de flou, pas d'animation. */
+  html.simple .bg-grid {
+    background-image: none;
+  }
+
+  html.simple .glass,
+  html.simple .glass-play {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: rgb(var(--line));
+    background-image: none;
+    box-shadow: none;
+  }
+
+  html.simple .glass {
+    background-color: rgb(var(--panel));
+  }
+
+  html.simple .glass-play {
+    background-color: rgb(var(--primary));
+  }
+
+  html.simple [class*='backdrop-blur'] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html.simple *,
+  html.simple *::before,
+  html.simple *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* On garde le spinner de chargement : un loader figé ressemble à un bug. */
+  html.simple .animate-spin {
+    animation: spin 1s linear infinite !important;
+  }
+
+  /* Le verre tombe aussi pour les réglages système d'accessibilité. */
+  @media (prefers-reduced-transparency: reduce) {
+    .glass,
+    .glass-play {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background-image: none;
+      background-color: rgb(var(--panel));
+      box-shadow: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html *,
+    html *::before,
+    html *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   /* Dégradé "néon" signature de l'Auto-Mix. */
