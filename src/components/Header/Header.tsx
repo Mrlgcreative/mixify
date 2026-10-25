@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Disc, Music, Search, UserRound, X } from 'lucide-react';
+import { Disc, Music, Search, UserRound, X } from 'lucide-react';
 
 import { AuthPanel } from '../Auth/AuthPanel';
 import { useAuthStore } from '../../store/authStore';
@@ -9,10 +9,6 @@ import { Cover } from '../common/Cover';
 
 interface HeaderProps {
   view: ViewName;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onBack: () => void;
-  onForward: () => void;
   query: string;
   onQueryChange: (query: string) => void;
   onSubmitQuery: () => void;
@@ -31,10 +27,6 @@ const TITLES: Record<ViewName, string> = {
 /** Header sticky : historique de navigation + recherche. */
 export function Header({
   view,
-  canGoBack,
-  canGoForward,
-  onBack,
-  onForward,
   query,
   onQueryChange,
   onSubmitQuery,
@@ -62,38 +54,17 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-20 flex items-center gap-3 bg-panel px-3 py-3 md:gap-4 md:px-6">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={!canGoBack}
-          aria-label="Précédent"
-          className="rounded-full bg-black/40 p-1.5 text-muted transition enabled:hover:text-white disabled:opacity-40"
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={onForward}
-          disabled={!canGoForward}
-          aria-label="Suivant"
-          className="rounded-full bg-black/40 p-1.5 text-muted transition enabled:hover:text-white disabled:opacity-40"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-
       <h1 className="hidden text-base font-semibold text-white lg:block">{TITLES[view]}</h1>
 
       <form
-        className="relative ml-auto flex flex-1 items-center justify-end gap-2"
+        className="relative ml-auto flex w-full flex-1 items-center justify-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           setFocused(false);
           onSubmitQuery();
         }}
       >
-        <div className="relative">
+        <div className="relative min-w-0 flex-1">
           <Search
             size={18}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
@@ -106,7 +77,7 @@ export function Header({
             onBlur={() => setTimeout(() => setFocused(false), 150)}
             placeholder="Rechercher un titre, un artiste…"
             aria-label="Rechercher"
-            className="w-full rounded-full border border-line bg-elevated py-2 pl-9 pr-9 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none sm:w-[420px] lg:w-[520px] xl:w-[640px]"
+            className="w-full rounded-full border border-line bg-elevated py-2 pl-9 pr-9 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none"
           />
           {query && (
             <button
@@ -123,7 +94,7 @@ export function Header({
         </div>
 
         {showSuggestions && (
-          <div className="absolute right-0 top-11 z-50 w-full max-w-[420px] overflow-hidden rounded-panel border border-line bg-panel shadow-[0_20px_60px_rgba(0,0,0,0.7)]">
+          <div className="absolute right-0 top-11 z-50 w-full overflow-hidden rounded-panel border border-line bg-panel shadow-[0_20px_60px_rgba(0,0,0,0.7)]">
             {artists.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">

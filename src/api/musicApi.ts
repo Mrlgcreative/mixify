@@ -169,6 +169,7 @@ interface ApiTrack {
   key: string | null;
   year: number | null;
   genre?: string | null;
+  plays_7d?: number | null;
   created_at?: string | null;
 }
 
@@ -270,6 +271,7 @@ function toTrack(raw: ApiTrack): Track {
     bpm: raw.bpm ?? undefined,
     key: raw.key ?? undefined,
     genre: raw.genre ?? undefined,
+    plays: raw.plays_7d ?? undefined,
     year: raw.year ?? undefined,
   };
 }
@@ -418,7 +420,7 @@ class MixifyApi implements MusicApi {
 
   async getHome(): Promise<HomeFeed> {
     const [{ tracks }, { artists }, playlists] = await Promise.all([
-      request<{ tracks: ApiTrack[] }>('/api/tracks'),
+      request<{ tracks: ApiTrack[] }>('/api/tracks?stats=1'),
       request<{ artists: ApiArtist[] }>('/api/artists'),
       this.myPlaylists().catch(() => []),
     ]);
@@ -426,6 +428,7 @@ class MixifyApi implements MusicApi {
     const mappedTracks = tracks.map(toTrack);
     const mappedArtists = artists.map(toArtist);
     const withTempo = mappedTracks.filter((track) => track.bpm);
+    const byPlays = (a: Track, b: Track) => (b.plays ?? 0) - (a.plays ?? 0);
     const hour = new Date().getHours();
 
     // Scène locale : artistes de Kolwezi / RDC (pays ou genres renseignés).
@@ -444,6 +447,21 @@ class MixifyApi implements MusicApi {
         title: 'Scène de Kolwezi',
         subtitle: 'Les voix et les pochettes de la région',
         items: [...localTracks, ...localArtists],
+      });
+    }
+
+    // Ce que la région écoute : classement par écoutes réelles des 7 derniers
+    // jours (`plays` fourni par GET /api/tracks?stats=1).
+    const localHot = localTracks
+      .filter((track) => (track.plays ?? 0) > 0)
+      .sort(byPlays)
+      .slice(0, 20);
+    if (localHot.length >= 2) {
+      shelves.push({
+        id: 'kolwezi-hot',
+        title: 'Ce que Kolwezi écoute',
+        subtitle: 'Les titres les plus joués cette semaine',
+        items: localHot,
       });
     }
 
@@ -480,6 +498,38 @@ class MixifyApi implements MusicApi {
         title: 'Artistes émergents de Kolwezi',
         subtitle: 'Les nouveaux talents à suivre',
         items: emerging,
+      });
+    }
+
+    // Playlists par ambiance / occasion : remplies par genre, classées par les
+    // écoutes récentes (même signal que « Ce que Kolwezi écoute »).
+    const occasions = [
+      { id: 'mariage', title: 'Mariage', pattern: /rumba|ndombolo|slow|zouk|love|afro/i },
+      { id: 'eglise', title: 'Église', pattern: /gospel|louange|worship|adoration|chr[eé]tien/i },
+      { id: 'soiree', title: 'Soirée', pattern: /ndombolo|amapiano|rap|dance|afro|électro|electro|coup[ée]/i },
+    ];
+    const moods: Playlist[] = [];
+    for (const occasion of occasions) {
+      const picks = mappedTracks
+        .filter((track) => occasion.pattern.test(track.genre ?? ''))
+        .sort(byPlays)
+        .slice(0, 20);
+      if (picks.length < 2) continue;
+      moods.push({
+        id: `ambiance-${occasion.id}`,
+        title: occasion.title,
+        description: picks.some((track) => (track.plays ?? 0) > 0)
+          ? `${picks.length} titres · les plus écoutés`
+          : `${picks.length} titres`,
+        tracks: picks,
+      });
+    }
+    if (moods.length > 0) {
+      shelves.push({
+        id: 'ambiances',
+        title: 'Ambiances & occasions',
+        subtitle: 'Mariage, église, soirée',
+        items: moods,
       });
     }
 

@@ -9,19 +9,22 @@ import { usePlayer } from '../store/playerStore';
 
 interface SearchViewProps {
   query: string;
+  /** Lance une recherche (genres mis en avant). */
+  onSearch: (query: string) => void;
 }
 
-const TRENDING = [
-  { title: 'Pop', color: 'from-pink-500/30 to-purple-600/30' },
-  { title: 'Hip-Hop', color: 'from-orange-500/30 to-red-600/30' },
-  { title: 'Electro', color: 'from-cyan-500/30 to-blue-600/30' },
-  { title: 'Rock', color: 'from-yellow-500/30 to-orange-600/30' },
-  { title: 'R&B', color: 'from-violet-500/30 to-fuchsia-600/30' },
-  { title: 'Jazz', color: 'from-emerald-500/30 to-teal-600/30' },
+/** Genres locaux mis en avant : un clic lance la recherche correspondante. */
+const GENRES = [
+  { title: 'Rumba', color: 'from-amber-400/25 to-orange-700/20' },
+  { title: 'Ndombolo', color: 'from-rose-400/25 to-red-700/20' },
+  { title: 'Gospel', color: 'from-emerald-400/25 to-teal-700/20' },
+  { title: 'Amapiano', color: 'from-sky-400/25 to-blue-700/20' },
+  { title: 'Rap', color: 'from-violet-400/25 to-fuchsia-700/20' },
+  { title: 'Kolwezi', color: 'from-yellow-300/25 to-amber-700/20' },
 ];
 
-export function SearchView({ query }: SearchViewProps) {
-  const { data, loading } = useSearch(query);
+export function SearchView({ query, onSearch }: SearchViewProps) {
+  const { data, loading, error } = useSearch(query);
   const playTrack = usePlayer((s) => s.playTrack);
 
   if (!query.trim()) {
@@ -32,14 +35,15 @@ export function SearchView({ query }: SearchViewProps) {
           <p className="text-sm text-muted">Découvre de nouveaux artistes, albums et titres</p>
         </div>
 
-        <section className="mb-8">
-          <h2 className="mb-4 text-lg font-semibold text-white">Tendances</h2>
+        <section>
+          <h2 className="mb-4 text-lg font-semibold text-white">Genres d’ici</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-            {TRENDING.map((item) => (
+            {GENRES.map((item) => (
               <button
                 key={item.title}
                 type="button"
-                className={`group relative flex h-24 items-end overflow-hidden rounded-card bg-gradient-to-br p-4 transition hover:scale-[1.02] hover:shadow-lg ${item.color}`}
+                onClick={() => onSearch(item.title)}
+                className={`group relative flex h-24 items-end overflow-hidden rounded-card bg-gradient-to-br p-4 text-left transition hover:scale-[1.02] hover:shadow-lg ${item.color}`}
               >
                 <span className="text-lg font-bold text-white drop-shadow-lg">{item.title}</span>
                 <div className="absolute right-2 top-2 opacity-50 transition group-hover:opacity-80">
@@ -47,28 +51,6 @@ export function SearchView({ query }: SearchViewProps) {
                 </div>
               </button>
             ))}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-4 text-lg font-semibold text-white">Parcourir tout</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            <div className="flex h-16 items-center gap-3 rounded-card bg-card p-4 transition hover:bg-elevated">
-              <User size={20} className="text-primary" />
-              <span className="font-medium text-white">Artistes</span>
-            </div>
-            <div className="flex h-16 items-center gap-3 rounded-card bg-card p-4 transition hover:bg-elevated">
-              <Disc size={20} className="text-primary" />
-              <span className="font-medium text-white">Albums</span>
-            </div>
-            <div className="flex h-16 items-center gap-3 rounded-card bg-card p-4 transition hover:bg-elevated">
-              <Music size={20} className="text-primary" />
-              <span className="font-medium text-white">Titres</span>
-            </div>
-            <div className="flex h-16 items-center gap-3 rounded-card bg-card p-4 transition hover:bg-elevated">
-              <SearchIcon size={20} className="text-primary" />
-              <span className="font-medium text-white">Playlists</span>
-            </div>
           </div>
         </section>
       </div>
@@ -110,6 +92,15 @@ export function SearchView({ query }: SearchViewProps) {
             ))}
           </div>
         </section>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-4 py-6 md:px-6">
+        <h1 className="mb-1 text-xl font-bold text-white">Recherche indisponible</h1>
+        <p className="text-sm text-danger">{error}</p>
       </div>
     );
   }

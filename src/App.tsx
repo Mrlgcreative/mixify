@@ -129,14 +129,11 @@ export default function App() {
     });
   };
 
-  const back = () =>
-    setNav((current) => ({ ...current, cursor: Math.max(0, current.cursor - 1) }));
-
-  const forward = () =>
-    setNav((current) => ({
-      ...current,
-      cursor: Math.min(current.stack.length - 1, current.cursor + 1),
-    }));
+  /** Met à jour la recherche et ouvre la page de résultats au besoin. */
+  const changeQuery = (value: string) => {
+    setQuery(value);
+    if (value.trim() && (playlistRoute || view !== 'search')) navigate('search');
+  };
 
   /** Ouvre la page dédiée `/playlist/<id>`. */
   const openPlaylist = (id: string) => {
@@ -196,15 +193,8 @@ export default function App() {
         >
           <Header
             view={playlistRoute ? 'library' : view}
-            canGoBack={playlistRoute ? true : nav.cursor > 0}
-            canGoForward={playlistRoute ? false : nav.cursor < nav.stack.length - 1}
-            onBack={playlistRoute ? closePlaylist : back}
-            onForward={forward}
             query={query}
-            onQueryChange={(value) => {
-              setQuery(value);
-              if (value.trim() && (playlistRoute || view !== 'search')) navigate('search');
-            }}
+            onQueryChange={changeQuery}
             onSubmitQuery={() => navigate('search')}
             onOpenProfile={() => navigate('profile')}
           />
@@ -219,7 +209,7 @@ export default function App() {
             ) : (
               <>
                 {view === 'home' && <Home onOpenAlbum={openAlbum} onOpenArtist={openArtist} />}
-                {view === 'search' && <SearchView query={query} />}
+                {view === 'search' && <SearchView query={query} onSearch={changeQuery} />}
                 {view === 'library' && <LibraryView onSelect={openPlaylist} />}
                 {view === 'artist' && <ArtistStudio />}
                 {view === 'profile' && (

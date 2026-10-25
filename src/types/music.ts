@@ -122,6 +122,8 @@ export interface Track {
   key?: string;
   /** Genre musical (texte libre). */
   genre?: string;
+  /** Écoutes des 7 derniers jours (tous comptes), quand l'API les fournit. */
+  plays?: number;
   year?: number;
   explicit?: boolean;
   /** Identifiant de l'entrée dans une playlist (`playlist_tracks`). */
