@@ -1,16 +1,53 @@
-import { Check, ChevronDown, Download, FileText, ListMusic, Loader2, MessageCircle, MoreHorizontal, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { Check, ChevronDown, Download, FileText, Heart, ListMusic, Loader2, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
 import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { usePlayer } from '../../store/playerStore';
 import { useFollows } from '../../store/followsStore';
+import { useLibraryStore } from '../../store/libraryStore';
+import { imageHues, seedHues } from '../../utils/coverColors';
 import { estimateAudioBytes, formatBytes, formatTime } from '../../utils/format';
-import { shareTrackToStory, shareTrackToWhatsApp } from '../../utils/share';
+import { shareTrackToWhatsApp } from '../../utils/share';
 
 interface NowPlayingProps {
   open: boolean;
   onClose: () => void;
+}
+
+/** Action du bas du lecteur : icône ronde, libellé court, détail optionnel. */
+function ActionButton({
+  icon,
+  label,
+  hint,
+  accent,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  hint?: string;
+  accent?: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-1 text-[10px] font-medium transition ${
+        active ? 'text-primary' : 'text-white/60 hover:text-white'
+      }`}
+    >
+      <span
+        className={`flex h-9 w-9 items-center justify-center rounded-full bg-white/5 ${accent ?? ''}`}
+      >
+        {icon}
+      </span>
+      <span className="max-w-full truncate">{label}</span>
+      {hint && <span className="text-[9px] leading-none text-white/35">{hint}</span>}
+    </button>
+  );
 }
 
 export function NowPlaying({ open, onClose }: NowPlayingProps) {
@@ -32,10 +69,13 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
   const following = useFollows((s) => s.following);
   const toggleFollow = useFollows((s) => s.toggle);
+  const favorites = useLibraryStore((s) => s.favorites);
+  const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
   const artistId = currentTrack?.artist?.id;
   const canFollow = Boolean(artistId && artistId !== 'inconnu' && artistId.trim() !== '');
   const isFollow = canFollow ? following.some((f) => f.id === artistId) : false;
 
+  const [palette, setPalette] = useState(() => seedHues(currentTrack?.id ?? 'mixify'));
   const [showLyricsSheet, setShowLyricsSheet] = useState(false);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
@@ -58,9 +98,26 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     setSaved(entry ? { bytes: entry.bytes } : null);
   }, [currentTrack?.id]);
 
+  // Fond aux couleurs de la pochette : dégradé génératif immédiat, puis
+  // moyenne de l'image réelle quand elle est lisible.
+  useEffect(() => {
+    if (!currentTrack) return;
+    setPalette(seedHues(currentTrack.id));
+    const cover = currentTrack.album?.coverUrl;
+    if (!cover) return;
+    let cancelled = false;
+    void imageHues(cover).then((hues) => {
+      if (!cancelled && hues) setPalette(hues);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.id, currentTrack?.album?.coverUrl]);
+
   if (!open || !currentTrack) return null;
 
   const progress = duration > 0 ? (position / duration) * 100 : 0;
+  const liked = Boolean(favorites[currentTrack.id]);
 
   const fetchLyrics = async () => {
     if (lyrics || lyricsLoading) return;
@@ -86,11 +143,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     }
   };
 
-  const handleShare = async () => {
-    await shareTrackToStory(currentTrack);
-  };
-
   const handleDownload = async () => {
+    if (downloadBusy) return;
     setDownloadError(null);
     setDownloadBusy(true);
     try {
@@ -118,15 +172,12 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-bg md:hidden">
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `radial-gradient(ellipse at top, rgb(var(--primary) / 0.22) 0%, rgb(var(--primary) / 0.08) 35%, transparent 70%)`,
-        }}
-      />
-      <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-primary/10 to-transparent" />
-
+    <div
+      className="fixed inset-0 z-[70] flex flex-col md:hidden"
+      style={{
+        background: `radial-gradient(130% 85% at 50% -10%, hsl(${palette.hue} 72% 45% / 0.55) 0%, hsl(${palette.hue} 60% 28% / 0.3) 45%, transparent 78%), linear-gradient(180deg, hsl(${palette.hue2} 45% 16%) 0%, rgb(var(--bg)) 62%)`,
+      }}
+    >
       <header className="relative z-10 flex items-center justify-between px-4 pb-2 pt-[calc(env(safe-area-inset-top)+10px)]">
         <button
           type="button"
@@ -140,139 +191,89 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
           <p className="text-[10px] uppercase tracking-[0.4em] text-white/40">Lecture</p>
           <p className="text-xs text-white/70">Mixify</p>
         </div>
-        <button
-          type="button"
-          aria-label="Plus d'options"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-white/70 transition hover:bg-white/5 hover:text-white"
-        >
-          <MoreHorizontal size={22} />
-        </button>
+        <span className="h-10 w-10" aria-hidden="true" />
       </header>
 
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-between px-6 pb-8 pt-6">
-        <div className="flex w-full flex-1 items-center justify-center">
-          <div className="relative w-full max-w-[340px]">
-            <div className="absolute -inset-6 rounded-[40px] bg-primary/20 blur-3xl" />
+      <main className="relative z-10 flex min-h-0 flex-1 flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+14px)]">
+        {/* Pochette : presque toute la largeur, réduite sur les écrans courts. */}
+        <div className="flex min-h-0 flex-1 items-center justify-center py-3">
+          <div className="relative size-[min(82vw,46dvh)] max-w-[420px]">
+            <div
+              className="absolute -inset-6 rounded-[40px] opacity-70 blur-3xl"
+              style={{ backgroundColor: `hsl(${palette.hue} 70% 50%)` }}
+            />
             <Cover
               seed={currentTrack.id}
               title={currentTrack.title}
               imageUrl={currentTrack.album?.coverUrl}
-              className="relative aspect-square w-full rounded-[28px] shadow-[0_60px_140px_rgba(0,0,0,0.7)]"
+              className="relative aspect-square w-full rounded-[26px] shadow-[0_40px_100px_rgba(0,0,0,0.65)]"
             />
           </div>
         </div>
 
-        <div className="w-full max-w-[340px] space-y-5">
-          <div className="flex items-center justify-between gap-4">
+        <div className="space-y-3.5">
+          <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-2xl font-semibold tracking-tight text-white">{currentTrack.title}</h1>
-              <p className="mt-1 truncate text-base text-white/60">{currentTrack.artist.name}</p>
+              <h1 className="truncate text-[22px] font-semibold tracking-tight text-white">
+                {currentTrack.title}
+              </h1>
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="min-w-0 truncate text-[15px] text-white/60">{currentTrack.artist.name}</p>
+                {canFollow && (
+                  <button
+                    type="button"
+                    onClick={() => toggleFollow(currentTrack.artist)}
+                    aria-pressed={isFollow}
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
+                      isFollow
+                        ? 'border-white/25 text-white/60 hover:border-white/40'
+                        : 'border-primary/50 text-primary hover:bg-primary/10'
+                    }`}
+                  >
+                    {isFollow ? 'Abonné' : "S'abonner"}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {canFollow && (
-                <button
-                  type="button"
-                  onClick={() => toggleFollow(currentTrack.artist)}
-                  aria-pressed={isFollow}
-                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                    isFollow
-                      ? 'border border-white/30 text-white/80 hover:border-white/50'
-                      : 'bg-white text-black hover:bg-white/90'
-                  }`}
-                >
-                  {isFollow ? 'Abonné' : "S'abonner"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => void handleShare()}
-                aria-label="Partager le titre"
-                className="flex h-10 w-10 items-center justify-center rounded-full text-white/60 transition hover:bg-white/5 hover:text-white"
-              >
-                <Share2 size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={toggleQueue}
-                aria-pressed={queueOpen}
-                aria-label="File d'attente"
-                className={`flex h-10 w-10 items-center justify-center rounded-full transition ${
-                  queueOpen ? 'bg-white/10 text-primary' : 'text-white/60 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <ListMusic size={20} />
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={openLyricsSheet}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
-          >
-            <FileText size={16} />
-            Voir les paroles
-          </button>
-
-          {/* Adaptations locales : préparation hors ligne et partage WhatsApp. */}
-          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => void handleDownload()}
-              disabled={downloadBusy}
-              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-full border px-3 py-2.5 text-sm font-semibold transition ${
-                saved
-                  ? 'border-primary/50 bg-primary/10 text-primary'
-                  : 'border-white/20 text-white hover:border-white/40'
+              onClick={() => void toggleFavorite(currentTrack.id)}
+              aria-pressed={liked}
+              aria-label={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition ${
+                liked ? 'text-primary' : 'text-white/70 hover:bg-white/5 hover:text-white'
               }`}
             >
-              {downloadBusy ? (
-                <Loader2 size={15} className="shrink-0 animate-spin" />
-              ) : saved ? (
-                <Check size={15} className="shrink-0" />
-              ) : (
-                <Download size={15} className="shrink-0" />
-              )}
-              <span className="truncate">
-                {saved ? 'Hors ligne' : 'Télécharger'}
-                {sizeText && (saved?.bytes ? ` · ${sizeText}` : ` · ≈${sizeText}`)}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => void shareTrackToWhatsApp(currentTrack)}
-              className="flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-3 py-2.5 text-sm font-bold text-black transition hover:brightness-110"
-            >
-              <MessageCircle size={16} />
-              WhatsApp
+              <Heart size={24} fill={liked ? 'currentColor' : 'none'} />
             </button>
           </div>
-          {downloadError && (
-            <p className="text-center text-[11px] text-danger">{downloadError}</p>
-          )}
 
-          <div className="space-y-2">
-            <div className="group relative h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="absolute inset-y-0 left-0 rounded-full bg-white"
-                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-              />
+          {/* Progression : piste fine, zone de glissement plus large. */}
+          <div>
+            <div className="relative flex h-8 items-center">
+              <div className="absolute inset-x-0 h-1 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-white"
+                  style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                />
+              </div>
               <input
                 type="range"
                 min={0}
                 max={duration || 0}
                 value={position}
                 onChange={(e) => seek(Number(e.target.value))}
+                aria-label="Position dans le morceau"
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
             </div>
-            <div className="flex justify-between text-xs tabular-nums text-white/40">
+            <div className="flex justify-between text-[11px] tabular-nums text-white/45">
               <span>{formatTime(position)}</span>
               <span>-{formatTime(Math.max(0, duration - position))}</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between px-1">
             <button
               type="button"
               onClick={toggleShuffle}
@@ -296,9 +297,13 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               type="button"
               onClick={() => void toggle()}
               aria-label={isPlaying ? 'Pause' : 'Lecture'}
-              className="glass-play flex h-20 w-20 items-center justify-center rounded-full text-primary-contrast transition hover:scale-105 active:scale-95"
+              className="glass-play flex h-[72px] w-[72px] items-center justify-center rounded-full text-primary-contrast transition hover:scale-105 active:scale-95"
             >
-              {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
+              {isPlaying ? (
+                <Pause size={30} fill="currentColor" />
+              ) : (
+                <Play size={30} fill="currentColor" className="ml-1" />
+              )}
             </button>
             <button
               type="button"
@@ -319,6 +324,47 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <RepeatIcon size={20} />
             </button>
           </div>
+
+          {/* Actions du bas : téléchargement à gauche, le reste groupé à droite. */}
+          <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+            <ActionButton
+              onClick={() => void handleDownload()}
+              active={Boolean(saved)}
+              icon={
+                downloadBusy ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : saved ? (
+                  <Check size={18} />
+                ) : (
+                  <Download size={18} />
+                )
+              }
+              label={saved ? 'Hors ligne' : 'Télécharger'}
+              hint={sizeText ? `${saved?.bytes ? '' : '≈'}${sizeText}` : undefined}
+            />
+            <div className="flex items-center gap-3">
+              <ActionButton
+                onClick={() => void shareTrackToWhatsApp(currentTrack)}
+                accent="text-[#25D366]"
+                icon={<Share2 size={18} />}
+                label="WhatsApp"
+              />
+              <ActionButton
+                onClick={openLyricsSheet}
+                icon={<FileText size={18} />}
+                label="Paroles"
+              />
+              <ActionButton
+                onClick={toggleQueue}
+                active={queueOpen}
+                icon={<ListMusic size={18} />}
+                label="File"
+              />
+            </div>
+          </div>
+          {downloadError && (
+            <p className="pb-1 text-center text-[11px] text-danger">{downloadError}</p>
+          )}
         </div>
       </main>
 
