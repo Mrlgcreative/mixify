@@ -19,6 +19,7 @@ interface HeaderProps {
 const TITLES: Record<ViewName, string> = {
   home: 'Accueil',
   search: 'Rechercher',
+  charts: 'Classement',
   library: 'Bibliothèque',
   artist: 'Espace artiste',
   profile: 'Profil',
@@ -133,7 +134,7 @@ export function Header({
                     onClick={() => applySuggestion(track.title)}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-elevated"
                   >
-                    <Cover seed={track.id} title={track.title} className="h-10 w-10" imageUrl={track.album?.coverUrl} />
+                    <Cover seed={track.id} title={track.title} className="h-10 w-10" imageUrl={track.album?.coverUrl ?? track.coverUrl} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-white">{track.title}</p>
                       <p className="truncate text-xs text-muted">{track.artist.name}</p>

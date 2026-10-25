@@ -1,4 +1,4 @@
-import { Heart, Home, Library, Search, Mic2 } from 'lucide-react';
+import { Heart, Home, Library, Search, Mic2, BarChart3 } from 'lucide-react';
 
 import { AuthPanel } from '../Auth/AuthPanel';
 import { Logo } from '../Logo/Logo';
@@ -20,6 +20,7 @@ function isPlaylist(item: unknown): item is Playlist {
 const NAV_ITEMS: Array<{ view: ViewName; label: string; icon: typeof Home }> = [
   { view: 'home', label: 'Accueil', icon: Home },
   { view: 'search', label: 'Rechercher', icon: Search },
+  { view: 'charts', label: 'Classement', icon: BarChart3 },
   { view: 'library', label: 'Bibliothèque', icon: Library },
 ];
 

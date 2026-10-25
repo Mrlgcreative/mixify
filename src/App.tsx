@@ -13,6 +13,7 @@ import { ArtistStudio } from './views/ArtistStudio';
 import { LibraryView, PlaylistDetail } from './views/Library';
 import { Profile } from './views/Profile';
 import { SearchView } from './views/Search';
+import { ChartsView } from './views/Charts';
 import { AlbumDetail } from './views/AlbumDetail';
 import { ArtistDetail } from './views/ArtistDetail';
 import { useAuthStore } from './store/authStore';
@@ -210,6 +211,7 @@ export default function App() {
               <>
                 {view === 'home' && <Home onOpenAlbum={openAlbum} onOpenArtist={openArtist} />}
                 {view === 'search' && <SearchView query={query} onSearch={changeQuery} />}
+                {view === 'charts' && <ChartsView />}
                 {view === 'library' && <LibraryView onSelect={openPlaylist} />}
                 {view === 'artist' && <ArtistStudio />}
                 {view === 'profile' && (

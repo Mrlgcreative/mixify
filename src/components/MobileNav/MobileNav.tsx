@@ -1,4 +1,4 @@
-import { Home, Library, Mic2, Search } from 'lucide-react';
+import { Home, Library, Mic2, Search, BarChart3 } from 'lucide-react';
 
 import { useAuthStore } from '../../store/authStore';
 import type { ViewName } from '../../types/music';
@@ -16,6 +16,7 @@ export function MobileNav({ view, onNavigate }: MobileNavProps) {
   const items: Array<{ view: ViewName; label: string; icon: typeof Home }> = [
     { view: 'home', label: 'Accueil', icon: Home },
     { view: 'search', label: 'Rechercher', icon: Search },
+    { view: 'charts', label: 'Classement', icon: BarChart3 },
     { view: 'library', label: 'Bibliothèque', icon: Library },
     ...(canPublish
       ? [{ view: 'artist' as const, label: 'Artiste', icon: Mic2 }]

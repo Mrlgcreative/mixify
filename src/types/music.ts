@@ -112,6 +112,8 @@ export interface Track {
   title: string;
   artist: Artist;
   album?: Album;
+  /** Pochette propre au morceau (prime sur celle de l'album). */
+  coverUrl?: string;
   /** Durée en secondes. */
   duration: number;
   /** URL de streaming déjà résolue (l'API peut aussi l'exposer via getStreamUrl). */
@@ -203,7 +205,7 @@ export interface ProfileFollows {
 export type RepeatMode = 'off' | 'all' | 'one';
 
 /** Vue de l'application (pas de router : navigation locale pilotée par l'état). */
-export type ViewName = 'home' | 'search' | 'library' | 'artist' | 'profile';
+export type ViewName = 'home' | 'search' | 'charts' | 'library' | 'artist' | 'profile';
 /** État du lecteur — miroir du store Zustand. */
 export interface PlayerState {
   queue: Track[];

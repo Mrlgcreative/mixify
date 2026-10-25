@@ -169,6 +169,9 @@ interface ApiTrack {
   key: string | null;
   year: number | null;
   genre?: string | null;
+  /** Écoutes sur la fenêtre demandée (`?stats=1&period=…`). */
+  plays?: number | null;
+  /** Ancien nom du compteur 7 jours, gardé pendant le déploiement. */
   plays_7d?: number | null;
   created_at?: string | null;
 }
@@ -257,6 +260,7 @@ function toTrack(raw: ApiTrack): Track {
     id: raw.id,
     title: raw.title,
     artist,
+    coverUrl: raw.cover_url ?? undefined,
     album: raw.album
       ? {
           id: `${raw.artist_id ?? 'inconnu'}:${raw.album}`,
@@ -271,7 +275,7 @@ function toTrack(raw: ApiTrack): Track {
     bpm: raw.bpm ?? undefined,
     key: raw.key ?? undefined,
     genre: raw.genre ?? undefined,
-    plays: raw.plays_7d ?? undefined,
+    plays: raw.plays ?? raw.plays_7d ?? undefined,
     year: raw.year ?? undefined,
   };
 }
@@ -331,8 +335,13 @@ function toProfileFollows(raw: ApiFollows): ProfileFollows {
 
 // ------------------------------------------------------------------- client
 
+/** Fenêtre du classement : semaine, mois ou année. */
+export type ChartPeriod = 'week' | 'month' | 'year';
+
 export interface MusicApi {
   getHome(): Promise<HomeFeed>;
+  /** Classement des titres les plus écoutés sur la période (semaine/mois/année). */
+  getChart(period: ChartPeriod): Promise<Track[]>;
   search(query: string): Promise<SearchResults>;
   getPlaylist(id: string): Promise<Playlist>;
   getLibrary(): Promise<Library>;
@@ -394,6 +403,8 @@ export interface PublishInput {
   year?: number;
   /** Durée en secondes, lue par le lecteur avant l'envoi. */
   duration?: number;
+  /** Pochette déjà téléversée (`api.uploadImage`). */
+  coverUrl?: string;
 }
 
 /** Champs artiste au format attendu par le backend (snake_case). */
@@ -631,6 +642,16 @@ class MixifyApi implements MusicApi {
     return tracks.map(toTrack);
   }
 
+  async getChart(period: ChartPeriod): Promise<Track[]> {
+    const { tracks } = await request<{ tracks: ApiTrack[] }>(
+      `/api/tracks?stats=1&period=${period}`,
+    );
+    return tracks
+      .map(toTrack)
+      .filter((track) => (track.plays ?? 0) > 0)
+      .sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0));
+  }
+
   async getHistory(): Promise<HistoryEntry[]> {
     if (!getToken()) return [];
     const { history } = await request<{ history: ApiHistoryEntry[] }>('/api/history');
@@ -652,7 +673,7 @@ class MixifyApi implements MusicApi {
           external_id: isCatalogId ? null : track.id,
           titre: track.title,
           artiste: track.artist.name,
-          cover: track.album?.coverUrl ?? null,
+          cover: track.album?.coverUrl ?? track.coverUrl ?? null,
           genre: track.genre ?? null,
           duration_ms: Math.round(track.duration * 1000),
         }),
@@ -916,6 +937,7 @@ class MixifyApi implements MusicApi {
         album: input.album,
         bpm: input.bpm,
         year: input.year,
+        cover_url: input.coverUrl,
         duration_ms: input.duration ? Math.round(input.duration * 1000) : undefined,
         audio_url: publicUrl,
         audio_key: key,

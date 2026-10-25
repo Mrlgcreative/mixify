@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api/musicApi';
+import type { ChartPeriod } from '../api/musicApi';
 import { useLibraryStore } from '../store/libraryStore';
 import type {
   ArtistDashboard,
@@ -105,6 +106,11 @@ export function useLibrary(): AsyncState<Library> {
 /** Catalogue complet (sélecteur d'ajout dans une playlist). */
 export function useTracks(): AsyncState<Track[]> {
   return useAsync(() => api.getTracks(), []);
+}
+
+/** Classement des titres les plus écoutés (semaine, mois, année). */
+export function useChart(period: ChartPeriod): AsyncState<Track[]> {
+  return useAsync(() => api.getChart(period), [period]);
 }
 
 /** Historique d'écoute du compte (relancé via `revision`). */

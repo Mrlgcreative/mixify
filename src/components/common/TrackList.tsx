@@ -21,6 +21,8 @@ interface TrackListProps {
   onRemove?: (track: Track) => void;
   /** Actions propres à l'appelant (espace artiste : éditer, supprimer). */
   renderActions?: (track: Track) => ReactNode;
+  /** Affiche le rang (classement) à gauche de la pochette. */
+  numbered?: boolean;
 }
 
 function formatTime(seconds: number): string {
@@ -38,6 +40,7 @@ export function TrackList({
   highlightCurrent = true,
   onRemove,
   renderActions,
+  numbered = false,
 }: TrackListProps) {
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
@@ -105,6 +108,15 @@ export function TrackList({
             }`}
           >
             <div className="flex items-center gap-3">
+              {numbered && (
+                <span
+                  className={`w-6 shrink-0 text-right text-sm font-semibold tabular-nums ${
+                    index < 3 ? 'text-primary' : 'text-muted'
+                  }`}
+                >
+                  {index + 1}
+                </span>
+              )}
               {sortable && (
                 <GripVertical
                   size={16}
@@ -116,7 +128,7 @@ export function TrackList({
                   seed={track.id}
                   title={track.title}
                   className="h-11 w-11"
-                  imageUrl={track.album?.coverUrl}
+                  imageUrl={track.album?.coverUrl ?? track.coverUrl}
                 />
                 <button
                   type="button"
