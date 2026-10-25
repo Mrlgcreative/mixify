@@ -15,13 +15,14 @@ function setMediaMetadata(track: Track | null): void {
     mediaSession.metadata = null;
     return;
   }
+  const artwork = track.album?.coverUrl ?? track.coverUrl;
   try {
     mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artist?.name || undefined,
       album: track.album?.title || undefined,
-      artwork: track.album?.coverUrl
-        ? [{ src: track.album.coverUrl, sizes: '512x512', type: 'image/png' }]
+      artwork: artwork
+        ? [{ src: artwork, sizes: '512x512', type: 'image/png' }]
         : undefined,
     });
   } catch {

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Loader2, Music4, Upload } from 'lucide-react';
 
 import { api, type PublishStage } from '../api/musicApi';
+import { ImageUpload } from '../components/common/ImageUpload';
 
 const inputClass =
   'w-full rounded-card border border-line bg-elevated px-3 py-2.5 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none';
@@ -12,6 +13,7 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
   const [preview, setPreview] = useState('');
   const [title, setTitle] = useState('');
   const [album, setAlbum] = useState('');
+  const [cover, setCover] = useState('');
   const [bpm, setBpm] = useState('');
   const [year, setYear] = useState('');
   const [duration, setDuration] = useState(0);
@@ -60,12 +62,14 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
           bpm: bpm ? Number(bpm) : undefined,
           year: year ? Number(year) : undefined,
           duration: duration || undefined,
+          coverUrl: cover || undefined,
         },
         setStage,
         setProgress,
       );
       choose(null);
       setAlbum('');
+      setCover('');
       setBpm('');
       setYear('');
       setDone(
@@ -122,6 +126,20 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
             />
           </div>
         )}
+
+        <div className="flex items-center gap-4 rounded-panel bg-card p-3">
+          <ImageUpload
+            value={cover}
+            onChange={setCover}
+            folder="covers"
+            size={96}
+            label="Ajouter une pochette"
+          />
+          <div className="min-w-0 text-xs text-muted">
+            <p className="text-sm font-medium text-white">Pochette du morceau</p>
+            <p className="mt-1">JPG ou PNG, 5 Mo max. Sans image, un dégradé est généré.</p>
+          </div>
+        </div>
 
         <input
           value={title}

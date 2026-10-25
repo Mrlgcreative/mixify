@@ -192,7 +192,7 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
           <Cover
             seed={hero?.id ?? 'mixify'}
             title={hero?.title ?? 'Mixify'}
-            imageUrl={hero?.album?.coverUrl}
+            imageUrl={hero?.album?.coverUrl ?? hero?.coverUrl}
             rounded="panel"
             className="h-40 w-40 text-3xl shadow-card md:h-52 md:w-52"
           />

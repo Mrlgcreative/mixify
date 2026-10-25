@@ -53,7 +53,7 @@ export function Player() {
           <Cover
             seed={currentTrack?.id ?? 'mixify'}
             title={currentTrack?.title ?? 'Mixify'}
-            imageUrl={currentTrack?.album?.coverUrl}
+            imageUrl={currentTrack?.album?.coverUrl ?? currentTrack?.coverUrl}
             className="h-12 w-12 shrink-0 md:h-14 md:w-14"
           />
           <div className="min-w-0" style={{ textShadow: '0 1px 4px rgb(0 0 0 / 0.6)' }}>

@@ -103,7 +103,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   useEffect(() => {
     if (!currentTrack) return;
     setPalette(seedHues(currentTrack.id));
-    const cover = currentTrack.album?.coverUrl;
+    const cover = currentTrack.album?.coverUrl ?? currentTrack.coverUrl;
     if (!cover) return;
     let cancelled = false;
     void imageHues(cover).then((hues) => {
@@ -112,7 +112,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     return () => {
       cancelled = true;
     };
-  }, [currentTrack?.id, currentTrack?.album?.coverUrl]);
+  }, [currentTrack?.id, currentTrack?.album?.coverUrl, currentTrack?.coverUrl]);
 
   if (!open || !currentTrack) return null;
 
@@ -205,7 +205,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             <Cover
               seed={currentTrack.id}
               title={currentTrack.title}
-              imageUrl={currentTrack.album?.coverUrl}
+              imageUrl={currentTrack.album?.coverUrl ?? currentTrack.coverUrl}
               className="relative aspect-square w-full rounded-[26px] shadow-[0_40px_100px_rgba(0,0,0,0.65)]"
             />
           </div>
