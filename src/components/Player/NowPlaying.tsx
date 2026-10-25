@@ -1,11 +1,12 @@
-import { ChevronDown, FileText, ListMusic, MoreHorizontal, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
+import { Check, ChevronDown, Download, FileText, ListMusic, Loader2, MessageCircle, MoreHorizontal, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Cover } from '../common/Cover';
+import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { usePlayer } from '../../store/playerStore';
 import { useFollows } from '../../store/followsStore';
-import { formatTime } from '../../utils/format';
-import { shareTrackToStory } from '../../utils/share';
+import { estimateAudioBytes, formatBytes, formatTime } from '../../utils/format';
+import { shareTrackToStory, shareTrackToWhatsApp } from '../../utils/share';
 
 interface NowPlayingProps {
   open: boolean;
@@ -39,6 +40,9 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [lyricsError, setLyricsError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ bytes?: number } | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -47,6 +51,11 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     setLyricsError(null);
     setLyricsLoading(false);
     setShowLyricsSheet(false);
+    setDownloadError(null);
+    const entry = currentTrack
+      ? listDownloads().find((item) => item.track.id === currentTrack.id)
+      : undefined;
+    setSaved(entry ? { bytes: entry.bytes } : null);
   }, [currentTrack?.id]);
 
   if (!open || !currentTrack) return null;
@@ -80,6 +89,28 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const handleShare = async () => {
     await shareTrackToStory(currentTrack);
   };
+
+  const handleDownload = async () => {
+    setDownloadError(null);
+    setDownloadBusy(true);
+    try {
+      if (saved) {
+        await removeDownload(currentTrack.id);
+        setSaved(null);
+      } else {
+        await downloadTrack(currentTrack);
+        const entry = listDownloads().find((item) => item.track.id === currentTrack.id);
+        setSaved(entry ? { bytes: entry.bytes } : {});
+      }
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Téléchargement impossible.');
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
+  const sizeBytes = saved?.bytes ?? estimateAudioBytes(duration || currentTrack.duration);
+  const sizeText = sizeBytes > 0 ? formatBytes(sizeBytes) : '';
 
   const openLyricsSheet = () => {
     setShowLyricsSheet(true);
@@ -182,6 +213,43 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             <FileText size={16} />
             Voir les paroles
           </button>
+
+          {/* Adaptations locales : préparation hors ligne et partage WhatsApp. */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={downloadBusy}
+              className={`flex min-w-0 items-center justify-center gap-1.5 rounded-full border px-3 py-2.5 text-sm font-semibold transition ${
+                saved
+                  ? 'border-primary/50 bg-primary/10 text-primary'
+                  : 'border-white/20 text-white hover:border-white/40'
+              }`}
+            >
+              {downloadBusy ? (
+                <Loader2 size={15} className="shrink-0 animate-spin" />
+              ) : saved ? (
+                <Check size={15} className="shrink-0" />
+              ) : (
+                <Download size={15} className="shrink-0" />
+              )}
+              <span className="truncate">
+                {saved ? 'Hors ligne' : 'Télécharger'}
+                {sizeText && (saved?.bytes ? ` · ${sizeText}` : ` · ≈${sizeText}`)}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void shareTrackToWhatsApp(currentTrack)}
+              className="flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-3 py-2.5 text-sm font-bold text-black transition hover:brightness-110"
+            >
+              <MessageCircle size={16} />
+              WhatsApp
+            </button>
+          </div>
+          {downloadError && (
+            <p className="text-center text-[11px] text-danger">{downloadError}</p>
+          )}
 
           <div className="space-y-2">
             <div className="group relative h-1.5 w-full overflow-hidden rounded-full bg-white/10">

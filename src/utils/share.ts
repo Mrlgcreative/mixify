@@ -1,3 +1,6 @@
+import { api } from '../api/musicApi';
+import type { Track } from '../types/music';
+
 export async function shareTrackToStory(track: any) {
   if (!track) return;
   const url = `${window.location.origin}/track/${track.id}`;
@@ -37,4 +40,26 @@ export async function shareTrackToStory(track: any) {
       alert('Lien copié');
     }
   } catch {}
+}
+
+/**
+ * Lien WhatsApp pré-rempli avec le titre et le fichier audio : c'est ainsi que
+ * la musique circule localement (le destinataire écoute sans installer l'app).
+ * Si l'URL audio n'est pas disponible, on retombe sur le lien du site.
+ */
+export async function whatsAppShareLink(track: Track): Promise<string> {
+  let target = window.location.origin;
+  try {
+    target = await api.getStreamUrl(track);
+  } catch {
+    /* flux introuvable : on partage au moins le lien de l'application */
+  }
+  const text = `${track.title} — ${track.artist.name} sur Mixify\n${target}`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+/** Ouvre WhatsApp (application sur mobile, web sinon) avec le partage prêt. */
+export async function shareTrackToWhatsApp(track: Track): Promise<void> {
+  const link = await whatsAppShareLink(track);
+  window.open(link, '_blank', 'noopener,noreferrer');
 }

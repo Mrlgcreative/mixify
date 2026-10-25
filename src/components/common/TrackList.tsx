@@ -1,10 +1,12 @@
 import { useState, type DragEvent, type ReactNode } from 'react';
-import { Check, Download, GripVertical, Heart, ListPlus, Loader2, Pause, Play, Trash2 } from 'lucide-react';
+import { Check, Download, GripVertical, Heart, ListPlus, Loader2, MessageCircle, Pause, Play, Trash2 } from 'lucide-react';
 
 import { Cover } from './Cover';
 import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { useLibraryStore } from '../../store/libraryStore';
 import { usePlayer } from '../../store/playerStore';
+import { estimateAudioBytes, formatBytes } from '../../utils/format';
+import { shareTrackToWhatsApp } from '../../utils/share';
 import type { Track } from '../../types/music';
 
 interface TrackListProps {
@@ -48,7 +50,7 @@ export function TrackList({
   const favorites = useLibraryStore((s) => s.favorites);
   const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
 
-  const [savedIds, setSavedIds] = useState<string[]>(() => listDownloads().map((entry) => entry.track.id));
+  const [downloads, setDownloads] = useState(() => listDownloads());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -56,9 +58,9 @@ export function TrackList({
     setDownloadError(null);
     setBusyId(track.id);
     try {
-      if (savedIds.includes(track.id)) await removeDownload(track.id);
+      if (downloads.some((entry) => entry.track.id === track.id)) await removeDownload(track.id);
       else await downloadTrack(track);
-      setSavedIds(listDownloads().map((entry) => entry.track.id));
+      setDownloads(listDownloads());
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : 'Téléchargement impossible.');
     } finally {
@@ -84,7 +86,13 @@ export function TrackList({
       {tracks.map((track, index) => {
         const isCurrent = highlightCurrent && currentTrack?.id === track.id;
         const liked = Boolean(favorites[track.id]);
-        const downloaded = savedIds.includes(track.id);
+        const saved = downloads.find((entry) => entry.track.id === track.id);
+        const sizeLabel = saved?.bytes ?? estimateAudioBytes(track.duration);
+        const sizeText = saved?.bytes
+          ? formatBytes(saved.bytes)
+          : sizeLabel > 0
+            ? `≈${formatBytes(sizeLabel)}`
+            : 'Télécharger';
         return (
           <li
             key={track.id}
@@ -92,7 +100,7 @@ export function TrackList({
             onDragStart={sortable ? onDragStart(index) : undefined}
             onDragOver={sortable ? (event) => event.preventDefault() : undefined}
             onDrop={sortable ? onDrop(index) : undefined}
-            className={`group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-card px-2 py-2 transition hover:bg-elevated ${
+            className={`group grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-card px-2 py-2 transition hover:bg-elevated sm:gap-3 ${
               sortable ? 'cursor-grab active:cursor-grabbing' : ''
             }`}
           >
@@ -133,7 +141,7 @@ export function TrackList({
               <p className="truncate text-xs text-muted">{track.artist.name}</p>
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-muted">
+            <div className="flex items-center gap-2 text-xs text-muted sm:gap-3">
               {showAlbum && <span className="hidden max-w-[180px] truncate md:block">{track.album?.title}</span>}
               {!sortable && (
                 <button
@@ -156,25 +164,41 @@ export function TrackList({
                   type="button"
                   onClick={() => void toggleDownload(track)}
                   disabled={busyId === track.id}
-                  title={downloaded ? 'Supprimer le téléchargement' : 'Télécharger pour l’écoute hors ligne'}
+                  title={
+                    saved
+                      ? 'Supprimer le téléchargement'
+                      : `Télécharger pour l’écoute hors ligne (${formatBytes(sizeLabel)})`
+                  }
                   aria-label={
-                    downloaded
+                    saved
                       ? `Supprimer ${track.title} des téléchargements`
-                      : `Télécharger ${track.title} pour l’écoute hors ligne`
+                      : `Télécharger ${track.title} (${formatBytes(sizeLabel)}) pour l’écoute hors ligne`
                   }
-                  className={
-                    downloaded
-                      ? 'text-primary'
-                      : 'opacity-100 transition hover:text-white sm:opacity-0 sm:group-hover:opacity-100'
-                  }
+                  className={`flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold tabular-nums transition ${
+                    saved
+                      ? 'border-primary/50 bg-primary/10 text-primary'
+                      : 'border-line text-subtle hover:border-primary/60 hover:text-primary'
+                  }`}
                 >
                   {busyId === track.id ? (
-                    <Loader2 size={15} className="animate-spin" />
-                  ) : downloaded ? (
-                    <Check size={15} />
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : saved ? (
+                    <Check size={13} />
                   ) : (
-                    <Download size={15} />
+                    <Download size={13} />
                   )}
+                  {sizeText}
+                </button>
+              )}
+              {!sortable && (
+                <button
+                  type="button"
+                  onClick={() => void shareTrackToWhatsApp(track)}
+                  title="Partager sur WhatsApp"
+                  aria-label={`Partager ${track.title} sur WhatsApp`}
+                  className="text-[#25D366] transition hover:text-[#3ee27a]"
+                >
+                  <MessageCircle size={16} />
                 </button>
               )}
               <span className="tabular-nums">{formatTime(track.duration)}</span>

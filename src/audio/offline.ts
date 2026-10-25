@@ -17,6 +17,8 @@ const CHANGE_EVENT = 'mixify:downloads';
 export interface DownloadEntry {
   url: string;
   track: Track;
+  /** Taille réelle du fichier (Content-Length), si le serveur l'expose. */
+  bytes?: number;
 }
 
 /** URL blob réutilisées pendant la session (évite de relire le cache). */
@@ -74,12 +76,13 @@ export async function downloadTrack(track: Track): Promise<void> {
   const url = await api.getStreamUrl(track);
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Téléchargement impossible (${response.status}).`);
+  const bytes = Number(response.headers.get('content-length')) || undefined;
 
   const cache = await caches.open(CACHE_NAME);
   await cache.put(url, response);
 
   const meta = readMeta();
-  meta[track.id] = { url, track };
+  meta[track.id] = { url, track, bytes };
   writeMeta(meta);
   notifyChange();
 }
