@@ -4,6 +4,7 @@ import { ChevronLeft, Heart, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-
 import { api } from '../api/musicApi';
 import { listDownloads, onDownloadsChange } from '../audio/offline';
 import { MediaCard } from '../components/common/MediaCard';
+import { useConfirm } from '../components/common/ConfirmDialog';
 import { Skeleton, SkeletonCard } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useLibrary, usePlaylist, useTracks } from '../hooks/useMusicApi';
@@ -228,6 +229,7 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
   const { data: catalog } = useTracks();
   const playTrack = usePlayer((s) => s.playTrack);
   const playlistsChanged = useLibraryStore((s) => s.playlistsChanged);
+  const ask = useConfirm();
 
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
@@ -284,7 +286,13 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
   };
 
   const removePlaylist = async () => {
-    if (!confirm(`Supprimer « ${playlist.title} » ?`)) return;
+    const ok = await ask({
+      title: `Supprimer « ${playlist.title} » ?`,
+      description: 'La playlist sera définitivement supprimée. Les morceaux restent dans le catalogue.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
     if (await run(() => api.deletePlaylist(id), 'Suppression impossible')) onBack();
   };
 
@@ -374,12 +382,20 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
             tracks={playlist.tracks}
             showAlbum
             onRemove={(track) => {
-              if (track.playlistEntryId) {
-                void run(
+              if (!track.playlistEntryId) return;
+              void (async () => {
+                const ok = await ask({
+                  title: `Retirer « ${track.title} » ?`,
+                  description: 'Le morceau quitte cette playlist mais reste dans le catalogue.',
+                  confirmLabel: 'Retirer',
+                  danger: true,
+                });
+                if (!ok) return;
+                await run(
                   () => api.removeTrackFromPlaylist(track.playlistEntryId as string),
                   'Retrait impossible',
                 );
-              }
+              })();
             }}
           />
         ) : (

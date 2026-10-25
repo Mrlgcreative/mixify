@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '../api/musicApi';
+import { useConfirm } from '../components/common/ConfirmDialog';
 import { AutoMixToggle } from '../components/AutoMix/AutoMixToggle';
 import { CrossfadeSettings } from '../components/AutoMix/CrossfadeSettings';
 import { Cover } from '../components/common/Cover';
@@ -145,6 +146,7 @@ function Avatar({ user, className = '' }: { user: AuthUser; className?: string }
 
 function AccountTab({ user }: { user: AuthUser }) {
   const setUser = useAuthStore((s) => s.setUser);
+  const ask = useConfirm();
   const [name, setName] = useState(user.name ?? '');
   const [bio, setBio] = useState(user.bio ?? '');
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '');
@@ -169,6 +171,12 @@ function AccountTab({ user }: { user: AuthUser }) {
       setMessage({ kind: 'error', text: 'Le nom est requis.' });
       return;
     }
+    const ok = await ask({
+      title: 'Enregistrer les modifications du profil ?',
+      description: 'Ton nom, ta bio et ta photo seront visibles par les autres utilisateurs.',
+      confirmLabel: 'Enregistrer',
+    });
+    if (!ok) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -390,11 +398,18 @@ function HistoryTab({
   onCleared: () => void;
 }) {
   const playTrack = usePlayer((s) => s.playTrack);
+  const ask = useConfirm();
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clear = async () => {
-    if (!window.confirm('Effacer tout votre historique d’écoute ?')) return;
+    const ok = await ask({
+      title: 'Effacer tout votre historique d’écoute ?',
+      description: 'Cette action est définitive et supprime aussi tes statistiques d’écoute.',
+      confirmLabel: 'Effacer',
+      danger: true,
+    });
+    if (!ok) return;
     setClearing(true);
     setError(null);
     try {

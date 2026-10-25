@@ -2,6 +2,7 @@ import { useState, type DragEvent, type ReactNode } from 'react';
 import { Check, Download, GripVertical, Heart, ListPlus, Loader2, MessageCircle, Pause, Play, Trash2 } from 'lucide-react';
 
 import { Cover } from './Cover';
+import { useConfirm } from './ConfirmDialog';
 import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { useLibraryStore } from '../../store/libraryStore';
 import { usePlayer } from '../../store/playerStore';
@@ -56,12 +57,23 @@ export function TrackList({
   const [downloads, setDownloads] = useState(() => listDownloads());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const ask = useConfirm();
 
   const toggleDownload = async (track: Track) => {
     setDownloadError(null);
+    const isSaved = downloads.some((entry) => entry.track.id === track.id);
+    if (isSaved) {
+      const ok = await ask({
+        title: `Supprimer le téléchargement de « ${track.title} » ?`,
+        description: 'Le morceau ne sera plus disponible hors ligne.',
+        confirmLabel: 'Supprimer',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setBusyId(track.id);
     try {
-      if (downloads.some((entry) => entry.track.id === track.id)) await removeDownload(track.id);
+      if (isSaved) await removeDownload(track.id);
       else await downloadTrack(track);
       setDownloads(listDownloads());
     } catch (error) {

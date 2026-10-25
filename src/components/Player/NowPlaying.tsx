@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { Check, ChevronDown, Download, FileText, Heart, ListMusic, Loader2, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
+import { useConfirm } from '../common/ConfirmDialog';
 import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { usePlayer } from '../../store/playerStore';
 import { useFollows } from '../../store/followsStore';
@@ -83,6 +84,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [saved, setSaved] = useState<{ bytes?: number } | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const ask = useConfirm();
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -145,6 +147,15 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
   const handleDownload = async () => {
     if (downloadBusy) return;
+    if (saved) {
+      const ok = await ask({
+        title: `Supprimer le téléchargement de « ${currentTrack.title} » ?`,
+        description: 'Le morceau ne sera plus disponible hors ligne.',
+        confirmLabel: 'Supprimer',
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setDownloadError(null);
     setDownloadBusy(true);
     try {

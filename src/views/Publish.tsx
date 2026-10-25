@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Loader2, Music4, Upload } from 'lucide-react';
 
 import { api, type PublishStage } from '../api/musicApi';
+import { useConfirm } from '../components/common/ConfirmDialog';
 import { ImageUpload } from '../components/common/ImageUpload';
 
 const inputClass =
@@ -22,6 +23,7 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const ask = useConfirm();
 
   // Libère l'URL locale du fichier précédent (et au démontage).
   useEffect(() => () => {
@@ -48,6 +50,14 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!file) return;
+    const ok = await ask({
+      title: `Publier « ${title.trim() || file.name} » ?`,
+      description: cover
+        ? 'Le morceau et sa pochette seront ajoutés au catalogue public.'
+        : 'Le morceau sera ajouté au catalogue public, sans pochette.',
+      confirmLabel: 'Publier',
+    });
+    if (!ok) return;
     setBusy(true);
     setStage(null);
     setProgress(0);

@@ -17,6 +17,7 @@ import { ImageUpload } from '../components/common/ImageUpload';
 
 import { api } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
+import { useConfirm } from '../components/common/ConfirmDialog';
 import { Skeleton, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useMyArtist, useArtistStats } from '../hooks/useMusicApi';
@@ -440,6 +441,7 @@ function TracksTab({
   const [editing, setEditing] = useState<Track | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const ask = useConfirm();
 
   const filtered = tracks.filter((track) =>
     [track.title, track.album?.title, track.genre]
@@ -450,13 +452,14 @@ function TracksTab({
   );
 
   const remove = async (track: Track) => {
-    if (
-      !window.confirm(
-        `Supprimer « ${track.title} » ? Le fichier audio sera aussi supprimé du stockage.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await ask({
+      title: `Supprimer « ${track.title} » ?`,
+      description:
+        'Le fichier audio sera aussi supprimé du stockage. Les écoutes, favoris et playlists liés à ce morceau seront retirés.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!ok) return;
     setError(null);
     setRemoving(track.id);
     try {
@@ -573,6 +576,7 @@ function TrackEditDialog({
   const [year, setYear] = useState(track.year?.toString() ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ask = useConfirm();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -585,6 +589,12 @@ function TrackEditDialog({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim()) return;
+    const ok = await ask({
+      title: `Enregistrer les modifications de « ${track.title} » ?`,
+      description: 'Les informations du morceau seront mises à jour dans le catalogue.',
+      confirmLabel: 'Enregistrer',
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     const input: TrackInput = {
@@ -747,6 +757,7 @@ function ProfileForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const ask = useConfirm();
   const [_verifyForm, _setVerifyForm] = useState({
     instagram_url: '',
     tiktok_url: '',
@@ -768,6 +779,14 @@ function ProfileForm({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!input.name.trim()) return;
+    if (artist) {
+      const ok = await ask({
+        title: 'Enregistrer les modifications du profil artiste ?',
+        description: 'Ces informations sont publiques et apparaissent dans le catalogue.',
+        confirmLabel: 'Enregistrer',
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setError(null);
     setDone(null);
