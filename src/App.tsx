@@ -9,6 +9,7 @@ import { Player } from './components/Player/Player';
 import { QueuePanel } from './components/Queue/QueuePanel';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { Home } from './views/Home';
+import { Admin } from './views/Admin';
 import { ArtistStudio } from './views/ArtistStudio';
 import { LibraryView, PlaylistDetail } from './views/Library';
 import { Profile } from './views/Profile';
@@ -214,6 +215,7 @@ export default function App() {
                 {view === 'charts' && <ChartsView />}
                 {view === 'library' && <LibraryView onSelect={openPlaylist} />}
                 {view === 'artist' && <ArtistStudio />}
+                {view === 'admin' && <Admin />}
                 {view === 'profile' && (
                   <Profile onSelectPlaylist={openPlaylist} onNavigate={navigate} />
                 )}

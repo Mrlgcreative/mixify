@@ -205,7 +205,7 @@ export interface ProfileFollows {
 export type RepeatMode = 'off' | 'all' | 'one';
 
 /** Vue de l'application (pas de router : navigation locale pilotée par l'état). */
-export type ViewName = 'home' | 'search' | 'charts' | 'library' | 'artist' | 'profile';
+export type ViewName = 'home' | 'search' | 'charts' | 'library' | 'artist' | 'profile' | 'admin';
 /** État du lecteur — miroir du store Zustand. */
 export interface PlayerState {
   queue: Track[];

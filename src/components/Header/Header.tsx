@@ -23,6 +23,7 @@ const TITLES: Record<ViewName, string> = {
   library: 'Bibliothèque',
   artist: 'Espace artiste',
   profile: 'Profil',
+  admin: 'Administration',
 };
 
 /** Header sticky : historique de navigation + recherche. */

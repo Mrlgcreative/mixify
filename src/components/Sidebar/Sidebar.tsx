@@ -1,4 +1,4 @@
-import { Heart, Home, Library, Search, Mic2, BarChart3 } from 'lucide-react';
+import { Heart, Home, Library, Search, Mic2, BarChart3, ShieldCheck } from 'lucide-react';
 
 import { AuthPanel } from '../Auth/AuthPanel';
 import { Logo } from '../Logo/Logo';
@@ -31,9 +31,15 @@ export function Sidebar({ view, onNavigate, onSelectPlaylist }: SidebarProps) {
   const playlists = (data?.shelves.flatMap((shelf) => shelf.items) ?? []).filter(isPlaylist);
   const canPublish =
     user?.role === 'artiste' || user?.role === 'developper' || user?.role === 'admin';
-  const items = canPublish
-    ? [...NAV_ITEMS, { view: 'artist' as const, label: 'Espace artiste', icon: Mic2 }]
-    : NAV_ITEMS;
+  const items = [
+    ...NAV_ITEMS,
+    ...(canPublish
+      ? [{ view: 'artist' as const, label: 'Espace artiste', icon: Mic2 }]
+      : []),
+    ...(user?.role === 'admin'
+      ? [{ view: 'admin' as const, label: 'Administration', icon: ShieldCheck }]
+      : []),
+  ];
 
   return (
     <aside className="hidden w-[240px] shrink-0 flex-col gap-6 rounded-panel bg-panel p-3 md:flex">

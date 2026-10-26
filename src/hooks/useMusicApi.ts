@@ -24,7 +24,7 @@ export interface AsyncState<T> {
  * Hook générique d'accès à l'API : gère le chargement, l'erreur et
  * l'annulation des réponses obsolètes (frappe rapide dans la recherche).
  */
-function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): AsyncState<T> {
+export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): AsyncState<T> {
   const [state, setState] = useState<AsyncState<T>>({
     data: null,
     loading: true,
