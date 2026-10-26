@@ -1,3 +1,6 @@
+import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
+import processorUrl from '@soundtouchjs/audio-worklet/processor?url';
+import { guess } from 'web-audio-beat-detector';
 import type { Track, MixTransition } from '../types/music';
 import {
   MAX_CROSSFADE_SECONDS,
@@ -7,6 +10,7 @@ import {
   resolveFadeDuration,
   transitionProfile,
 } from './crossfade';
+import { detectKey, harmonicFadeCap, type KeyEstimate } from './harmony';
 import { estimateTempo, type TempoEstimate } from './tempo';
 
 /**
@@ -20,9 +24,11 @@ import { estimateTempo, type TempoEstimate } from './tempo';
  *      constante (aucun trou de silence, aucune "creux" de volume) ;
  *   3. aligner les tempos : le titre sortant prend celui du suivant (±8 %)
  *      et une pulsation entrante tombe sur sa grille (beat-sync). Les BPM
- *      viennent de l'API si elle en fournit, sinon d'une estimation côté
- *      client (src/audio/tempo.ts) lancée au chargement de chaque flux ; sans
- *      BPM fiable, le fondu dégrade en puissance constante simple.
+ *      viennent d'une analyse du signal (`web-audio-beat-detector`, repli sur
+ *      src/audio/tempo.ts), la tonalité de `harmony.ts` ; un écart harmonique
+ *      raccourcit le fondu pour éviter que ça « sonne faux ». Le tempo est
+ *      étiré par SoundTouch (média rééchantillonné, hauteur inchangée) ; sans
+ *      worklet disponible, lecture native et fondu simple.
  *
  * shortcut: les flux doivent être servis avec des en-têtes CORS
  * (`Access-Control-Allow-Origin`), sinon la Web Audio API produit du silence
@@ -35,6 +41,10 @@ const TICK_MS = 100;
 
 interface Deck {
   el: HTMLAudioElement;
+  /** Source Web Audio du média (rebranchée sur SoundTouch si disponible). */
+  source: MediaElementAudioSourceNode;
+  /** Étirement temporel sans changement de hauteur (null = lecture native). */
+  st: SoundTouchNode | null;
   /** Égalisation des graves (bass swap). */
   low: BiquadFilterNode;
   /** Passe-bas de fermeture (filter sweep). */
@@ -83,7 +93,12 @@ export class AudioEngine {
 
   /** Tempo estimé par URL (null = non rythmique, voir tempo.ts). */
   private readonly beats = new Map<string, TempoEstimate | null>();
+  /** Tonalité estimée par URL (null = indéterminée, voir harmony.ts). */
+  private readonly keys = new Map<string, KeyEstimate | null>();
   private readonly analyzing = new Set<string>();
+
+  /** Branchement du worklet SoundTouch (une seule fois par contexte). */
+  private shifters: Promise<void> | null = null;
 
   private armed = false;
   private fadePlan: { startAt: number; endAt: number } | null = null;
@@ -147,6 +162,8 @@ export class AudioEngine {
 
       const deck: Deck = {
         el,
+        source,
+        st: null,
         low,
         lowpass,
         gain,
@@ -169,18 +186,56 @@ export class AudioEngine {
     return ctx;
   }
 
+  /**
+   * Intercale SoundTouch entre chaque média et son égaliseur : le beat-sync
+   * peut alors changer le tempo sans transposer (le média est rééchantillonné,
+   * SoundTouch compense la hauteur). Une seule fois, decks à l'arrêt.
+   */
+  private prepareShifters(): Promise<void> {
+    if (this.shifters) return this.shifters;
+    const ctx = this.ctx;
+    if (!ctx) return Promise.resolve();
+    this.shifters = (async () => {
+      try {
+        await SoundTouchNode.register(ctx, processorUrl);
+      } catch {
+        return; // AudioWorklet indisponible : lecture native, hauteur préservée
+      }
+      for (const deck of this.decks) {
+        if (deck.st) continue;
+        try {
+          const st = new SoundTouchNode({ context: ctx });
+          deck.source.disconnect();
+          deck.source.connect(st).connect(deck.low);
+          deck.el.preservesPitch = false; // la hauteur est gérée par SoundTouch
+          deck.st = st;
+        } catch {
+          /* ce deck reste en lecture native */
+        }
+      }
+    })();
+    return this.shifters;
+  }
+
+  /** Vitesse de lecture d'un deck : média + étirement temporel ensemble. */
+  private setRate(deck: Deck, rate: number): void {
+    deck.rate = rate;
+    deck.el.playbackRate = rate;
+    if (deck.st) deck.st.playbackRate.value = rate;
+  }
+
   // ------------------------------------------------------------------ lecture
 
   async play(track: Track, url: string, startAt = 0): Promise<void> {
     const ctx = this.ensureContext();
     if (ctx.state === 'suspended') await ctx.resume();
+    await this.prepareShifters();
     this.disarm();
     this.startBeatAnalysis(url); // tempo du sortant, prêt avant l'armement
 
     const deck = this.decks[this.active];
     this.resetFx(deck, ctx.currentTime);
-    deck.rate = 1;
-    deck.el.playbackRate = 1;
+    this.setRate(deck, 1);
     deck.track = track;
     await this.loadDeck(deck, url, startAt);
 
@@ -265,7 +320,7 @@ export class AudioEngine {
     this.nextLoaded = false;
     this.nextTransition = transition;
     if (!track || !this.ctx) return;
-    this.startBeatAnalysis(url); // tempo du suivant, prêt avant l'armement
+    this.startBeatAnalysis(url); // tempo + tonalité du suivant, prêts avant l'armement
     const idle = this.decks[1 - this.active];
     try {
       await this.loadDeck(idle, url);
@@ -283,13 +338,11 @@ export class AudioEngine {
       out.gain.gain.cancelScheduledValues(now);
       out.gain.gain.setValueAtTime(out.el.paused ? out.gain.gain.value : 1, now);
       // Le tempo ajusté (beat-sync) ne doit pas survivre à la transition.
-      out.rate = 1;
-      out.el.playbackRate = 1;
+      this.setRate(out, 1);
       const idle = this.decks[1 - this.active];
       idle.gain.gain.cancelScheduledValues(now);
       idle.gain.gain.setValueAtTime(0, now);
-      idle.rate = 1;
-      idle.el.playbackRate = 1;
+      this.setRate(idle, 1);
       this.resetFx(out, now);
       this.resetFx(idle, now);
       this.armed = false;
@@ -379,8 +432,12 @@ export class AudioEngine {
     // Le fondu ne peut pas dépasser la durée restante du titre sortant,
     // sinon la piste sortirait du fondu et laisserait un trou de silence.
     const remaining = Math.max(0, (duration - position) / outgoing.rate);
-    const outBpm = outgoing.track?.bpm ?? 0;
-    const inBpm = this.nextTrack.bpm ?? 0;
+    // Les estimations du signal passent avant les BPM de l'API, parfois
+    // doublés (un morceau à 128 BPM annoncé à 256).
+    const outBeat = this.beats.get(outgoing.url) ?? null;
+    const inBeat = this.beats.get(this.nextUrl) ?? null;
+    const outBpm = outBeat?.bpm ?? outgoing.track?.bpm ?? 0;
+    const inBpm = inBeat?.bpm ?? this.nextTrack.bpm ?? 0;
     const sameAlbum =
       !!outgoing.track?.album?.id &&
       !!this.nextTrack.album?.id &&
@@ -423,6 +480,14 @@ export class AudioEngine {
         fadeDuration = Math.min(fadeDuration, 3);
       }
     }
+
+    // Harmonie : deux tonalités éloignées superposées longtemps sonnent faux.
+    // On raccourcit alors le croisement au lieu de le supprimer (le fondu
+    // reste enchaîné, les deux morceaux ne se chevauchent presque plus).
+    const outKey = this.keys.get(outgoing.url) ?? null;
+    const inKey = this.keys.get(this.nextUrl) ?? null;
+    fadeDuration = harmonicFadeCap(fadeDuration, outKey, inKey);
+
     if (fadeDuration <= 0.05) {
       this.armed = false;
       this.nextTransition = null;
@@ -431,18 +496,14 @@ export class AudioEngine {
 
     // Les estimations de tempo sont lues sans await : si l'analyse n'est pas
     // terminée à l'armement, le plan dégrade proprement (fondu sans beat-sync).
-    const outBeat = this.beats.get(outgoing.url) ?? null;
-    const inBeat = this.beats.get(this.nextUrl) ?? null;
-
     const forceCut = transition?.style === 'cut';
     const skipTempoSync = forceCut || transition?.tempoSync === false;
     const plan = planBeatSync({
       position,
       duration,
       crossfade: fadeDuration,
-      // Priorité aux BPM fournis par l'API ; l'estimation comble le trou.
-      outBpm: skipTempoSync ? 0 : outgoing.track?.bpm ?? outBeat?.bpm ?? 0,
-      inBpm: skipTempoSync ? 0 : this.nextTrack.bpm ?? inBeat?.bpm ?? 0,
+      outBpm: skipTempoSync ? 0 : outBpm,
+      inBpm: skipTempoSync ? 0 : inBpm,
       outPhase: outBeat?.phase ?? 0,
       inPhase: inBeat?.phase ?? 0,
       outRate: outgoing.rate,
@@ -470,8 +531,7 @@ export class AudioEngine {
     const delayMs = Math.max(0, plan.fadeStart - LEAD_IN_SECONDS) * 1000;
     window.setTimeout(() => {
       if (!this.armed) return;
-      outgoing.el.playbackRate = plan.outgoingRate;
-      outgoing.rate = plan.outgoingRate;
+      this.setRate(outgoing, plan.outgoingRate);
       void this.startIncoming(incoming, plan.inOffset, fadeStartAbs, fadeDuration);
     }, delayMs);
   }
@@ -487,8 +547,7 @@ export class AudioEngine {
     const el = deck.el;
 
     // L'entrée joue à sa vitesse naturelle : c'est le sortant qui s'ajuste.
-    el.playbackRate = 1;
-    deck.rate = 1;
+    this.setRate(deck, 1);
     if (offset > 0) {
       try {
         el.currentTime = offset;
@@ -596,8 +655,7 @@ export class AudioEngine {
     outgoing.wet.gain.linearRampToValueAtTime(0, now + 0.8);
     outgoing.track = null;
     // Repasse en vitesse naturelle (le tempo ajusté ne doit pas fuiter).
-    outgoing.rate = 1;
-    outgoing.el.playbackRate = 1;
+    this.setRate(outgoing, 1);
 
     this.active = 1 - this.active;
     incoming.gain.gain.cancelScheduledValues(now);
@@ -623,21 +681,24 @@ export class AudioEngine {
   // ------------------------------------------------------------------ helpers
 
   /**
-   * Lance (une seule fois par URL) l'estimation de tempo d'un flux ; le
-   * résultat est lu à l'armement du fondu, sans bloquer la lecture.
+   * Lance (une seule fois par URL) l'analyse du flux — tempo et tonalité ;
+   * les résultats sont lus à l'armement du fondu, sans bloquer la lecture.
    */
   private startBeatAnalysis(url: string): void {
     if (!url || this.analyzing.has(url) || this.beats.has(url)) return;
     this.analyzing.add(url);
-    void this.analyze(url).then((estimate) => {
-      this.beats.set(url, estimate);
+    void this.analyze(url).then(({ tempo, key }) => {
+      this.beats.set(url, tempo);
+      this.keys.set(url, key);
       this.analyzing.delete(url);
     });
   }
 
-  private async analyze(url: string): Promise<TempoEstimate | null> {
+  private async analyze(
+    url: string,
+  ): Promise<{ tempo: TempoEstimate | null; key: KeyEstimate | null }> {
     const ctx = this.ctx;
-    if (!ctx) return null;
+    if (!ctx) return { tempo: null, key: null };
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -645,9 +706,13 @@ export class AudioEngine {
       // (~1,7 Mo/s stéréo) ; pour des médias de plusieurs dizaines de minutes,
       // analyser un segment (en-tête Range) au lieu du fichier entier.
       const audio = await ctx.decodeAudioData(await response.arrayBuffer());
-      return estimateTempo(audio.getChannelData(0), audio.sampleRate);
+      const mono = audio.getChannelData(0);
+      return {
+        tempo: (await libraryTempo(audio)) ?? estimateTempo(mono, audio.sampleRate),
+        key: detectKey(mono, audio.sampleRate),
+      };
     } catch {
-      return null; // flux non récupérable : fondu en puissance constante
+      return { tempo: null, key: null }; // flux non récupérable : fondu simple
     }
   }
 
@@ -683,6 +748,24 @@ export class AudioEngine {
     if (this.startTimer !== null) window.clearInterval(this.startTimer);
     this.decks.forEach((deck) => deck.el.pause());
     void this.ctx?.close();
+  }
+}
+
+/**
+ * BPM via `web-audio-beat-detector` (analyse spectrale, calculée en Worker).
+ * L'algorithme sort parfois le double ou la moitié du tempo ressenti : on
+ * ramène le résultat dans la plage 70–180 BPM, phase comprise.
+ */
+async function libraryTempo(buffer: AudioBuffer): Promise<TempoEstimate | null> {
+  try {
+    const { bpm, offset } = await guess(buffer);
+    if (!Number.isFinite(bpm) || bpm <= 0) return null;
+    let value = bpm;
+    while (value < 70) value *= 2;
+    while (value > 180) value /= 2;
+    return { bpm: value, phase: offset % (60 / value), confidence: 1 };
+  } catch {
+    return null;
   }
 }
 
