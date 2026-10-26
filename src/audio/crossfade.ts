@@ -77,6 +77,63 @@ export function resolveFadeDuration(
   return Math.min(requested, Math.max(0, remaining));
 }
 
+/** Styles de transition proposés par l'IA (`MixTransition['style']`). */
+export type TransitionStyle = 'blend' | 'bass_swap' | 'filter_sweep' | 'echo_out' | 'cut';
+
+export interface TransitionProfile {
+  /** Atténuation du grave du titre sortant en fin de fondu (dB, ≤ 0). */
+  outBassGain: number;
+  /** Atténuation du grave du titre entrant en début de fondu (dB, ≤ 0). */
+  inBassGain: number;
+  /** Fréquence d'arrivée du passe-bas sur le sortant (Hz), null = pas de filtre. */
+  outLowpassEnd: number | null;
+  /** Niveau de la send d'écho du sortant (0 = pas d'écho). */
+  echoWet: number;
+  /** Temps de retard de l'écho (s), calé sur un triolet du tempo sortant. */
+  echoDelay: number;
+}
+
+const NEUTRAL: TransitionProfile = {
+  outBassGain: 0,
+  inBassGain: 0,
+  outLowpassEnd: null,
+  echoWet: 0,
+  echoDelay: 0.3,
+};
+
+/**
+ * Paramètres audio d'un style de transition. Le fondu croisé à puissance
+ * constante reste la base ; ce profil ajoute le traitement propre au style :
+ *  - `bass_swap` : le grave du sortant disparaît d'abord, celui de l'entrant
+ *    revient après le milieu du fondu (évite le bas du spectre brouillon) ;
+ *  - `filter_sweep` : passe-bas qui se referme sur le sortant ;
+ *  - `echo_out` : écho (triolet du tempo) dont la send monte pendant le fondu ;
+ *  - `blend`, `cut` et style inconnu : fondu seul (le cut coupe le sortant).
+ */
+export function transitionProfile(
+  style: string | null | undefined,
+  outBpm: number,
+  fadeDuration: number,
+): TransitionProfile {
+  // Un fondu très court ne laisse pas le temps d'entendre un traitement.
+  if (fadeDuration < 0.5) return NEUTRAL;
+
+  switch (style) {
+    case 'bass_swap':
+      return { ...NEUTRAL, outBassGain: -18, inBassGain: -18 };
+    case 'filter_sweep':
+      return { ...NEUTRAL, outLowpassEnd: 400 };
+    case 'echo_out':
+      return {
+        ...NEUTRAL,
+        echoWet: 0.4,
+        echoDelay: outBpm > 0 ? beatInterval(outBpm) * 0.75 : 0.3,
+      };
+    default:
+      return NEUTRAL;
+  }
+}
+
 export interface BeatSyncParams {
   /** Position média courante du titre sortant (s). */
   position: number;

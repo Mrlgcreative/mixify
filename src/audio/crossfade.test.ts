@@ -10,6 +10,7 @@ import {
   MIN_CROSSFADE_SECONDS,
   MAX_CROSSFADE_SECONDS,
   resolveFadeDuration,
+  transitionProfile,
 } from './crossfade.ts';
 
 test('equalPowerCurves : puissance constante aux extrémités', () => {
@@ -222,4 +223,27 @@ test('resolveFadeDuration : cut quasi instantané, IA bornée, jamais au-delà d
   assert.equal(resolveFadeDuration({ style: 'bass_swap', duration: 0.5 }, 8, 30), 1);
   assert.equal(resolveFadeDuration(null, 7, 30), 7);
   assert.equal(resolveFadeDuration({ style: 'blend', duration: 10 }, 8, 3), 3);
+});
+
+test('transitionProfile : chaque style pilote un traitement distinct', () => {
+  const blend = transitionProfile('blend', 120, 8);
+  assert.deepEqual(blend, transitionProfile(null, 120, 8), 'style inconnu = fondu seul');
+  assert.equal(blend.outBassGain, 0);
+  assert.equal(blend.outLowpassEnd, null);
+  assert.equal(blend.echoWet, 0);
+
+  const bass = transitionProfile('bass_swap', 120, 8);
+  assert.ok(bass.outBassGain < 0 && bass.inBassGain < 0, 'les deux graves sont atténués');
+
+  const sweep = transitionProfile('filter_sweep', 120, 8);
+  assert.ok(sweep.outLowpassEnd !== null && sweep.outLowpassEnd < 1000, 'le passe-bas se referme');
+
+  const echo = transitionProfile('echo_out', 120, 8);
+  assert.ok(echo.echoWet > 0);
+  assert.ok(Math.abs(echo.echoDelay - 0.375) < 1e-6, 'triolet à 120 BPM');
+  assert.equal(transitionProfile('echo_out', 0, 8).echoDelay, 0.3, 'BPM inconnu : retard par défaut');
+
+  // Un fondu trop court ne laisse pas le temps d'entendre un traitement.
+  assert.equal(transitionProfile('bass_swap', 120, 0.3).outBassGain, 0);
+  assert.equal(transitionProfile('cut', 120, 8).outBassGain, 0);
 });

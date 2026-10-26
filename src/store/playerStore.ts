@@ -161,6 +161,15 @@ async function fetchMixPlan(queue: Track[], set: any, get: any): Promise<void> {
     const current = mixPlanKey(get().queue);
     if (current === key) {
       set({ mixPlan: plan, mixPlanKey: key });
+      // Le plan arrive après le préchargement : on applique son style au prochain fondu.
+      const { queue, currentIndex, pendingIndex } = get();
+      const outgoing = queue[currentIndex];
+      const incoming = pendingIndex === null ? null : queue[pendingIndex];
+      engine.applyTransition(
+        outgoing && incoming
+          ? plan.transitions[`${outgoing.id}->${incoming.id}`] ?? null
+          : null,
+      );
     }
   } catch {
     // L'IA n'est pas dispo : on garde le mix local, sans blocage.

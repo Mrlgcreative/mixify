@@ -5,6 +5,7 @@ import {
   equalPowerCurves,
   planBeatSync,
   resolveFadeDuration,
+  transitionProfile,
 } from './crossfade';
 import { estimateTempo, type TempoEstimate } from './tempo';
 
@@ -34,8 +35,16 @@ const TICK_MS = 100;
 
 interface Deck {
   el: HTMLAudioElement;
+  /** Égalisation des graves (bass swap). */
+  low: BiquadFilterNode;
+  /** Passe-bas de fermeture (filter sweep). */
+  lowpass: BiquadFilterNode;
   gain: GainNode;
   analyser: AnalyserNode;
+  /** Send d'écho (echo out). */
+  delay: DelayNode;
+  feedback: GainNode;
+  wet: GainNode;
   /** Vitesse de lecture courante (1 = normale, ajustée par le beat-sync). */
   rate: number;
   track: Track | null;
@@ -109,14 +118,46 @@ export class AudioEngine {
       el.crossOrigin = 'anonymous';
       el.preload = 'auto';
       const source = ctx.createMediaElementSource(el);
+      const low = ctx.createBiquadFilter();
+      low.type = 'lowshelf';
+      low.frequency.value = 160;
+      low.gain.value = 0;
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.value = 20000;
+      lowpass.Q.value = 0.7;
       const gain = ctx.createGain();
       gain.gain.value = 0;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.75;
-      source.connect(gain).connect(analyser).connect(this.master);
+      // Chemin sec : EQ -> filtre -> fondu -> analyseur -> master.
+      source.connect(low).connect(lowpass).connect(gain).connect(analyser).connect(this.master);
 
-      const deck: Deck = { el, gain, analyser, rate: 1, track: null, url: '' };
+      // Send d'écho (contourne le fondu : la queue survit à la fin du fondu).
+      const delay = ctx.createDelay(2);
+      delay.delayTime.value = 0.3;
+      const feedback = ctx.createGain();
+      feedback.gain.value = 0;
+      const wet = ctx.createGain();
+      wet.gain.value = 0;
+      lowpass.connect(delay);
+      delay.connect(feedback).connect(delay);
+      delay.connect(wet).connect(this.master);
+
+      const deck: Deck = {
+        el,
+        low,
+        lowpass,
+        gain,
+        analyser,
+        delay,
+        feedback,
+        wet,
+        rate: 1,
+        track: null,
+        url: '',
+      };
       el.addEventListener('ended', () => this.onElementEnded(deck));
       el.addEventListener('error', () => {
         if (deck.track) this.events.onError?.(`Flux indisponible : ${deck.track.title}`);
@@ -137,6 +178,7 @@ export class AudioEngine {
     this.startBeatAnalysis(url); // tempo du sortant, prêt avant l'armement
 
     const deck = this.decks[this.active];
+    this.resetFx(deck, ctx.currentTime);
     deck.rate = 1;
     deck.el.playbackRate = 1;
     deck.track = track;
@@ -169,7 +211,7 @@ export class AudioEngine {
     } catch {
       /* média pas encore chargé : on ignore */
     }
-    this.disarm();
+    this.disarm(true);
     this.anchorClock();
   }
 
@@ -208,6 +250,15 @@ export class AudioEngine {
   }
 
   /** Déclare le titre suivant : il est préchargé dans le deck idle. */
+  /**
+   * Applique le style du plan IA au titre déjà préchargé. Le plan arrive
+   * souvent après `setNext` : sans cela, le premier fondu resterait neutre.
+   */
+  applyTransition(transition: MixTransition | null): void {
+    if (this.armed) return; // un fondu en cours garde son style
+    this.nextTransition = transition;
+  }
+
   async setNext(track: Track | null, url: string, transition: MixTransition | null = null): Promise<void> {
     this.nextTrack = track;
     this.nextUrl = url;
@@ -225,7 +276,7 @@ export class AudioEngine {
   }
 
     /** Annule le fondu en cours (seek, changement de mode, changement de piste). */
-    private disarm(): void {
+    private disarm(keepTransition = false): void {
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
       const out = this.decks[this.active];
@@ -239,9 +290,11 @@ export class AudioEngine {
       idle.gain.gain.setValueAtTime(0, now);
       idle.rate = 1;
       idle.el.playbackRate = 1;
+      this.resetFx(out, now);
+      this.resetFx(idle, now);
       this.armed = false;
       this.fadePlan = null;
-      this.nextTransition = null;
+      if (!keepTransition) this.nextTransition = null;
     }
 
   // -------------------------------------------------------------------- tick
@@ -321,6 +374,7 @@ export class AudioEngine {
 
     const outgoing = this.decks[this.active];
     const incoming = this.decks[1 - this.active];
+    this.resetFx(outgoing, ctx.currentTime);
 
     // Le fondu ne peut pas dépasser la durée restante du titre sortant,
     // sinon la piste sortirait du fondu et laisserait un trou de silence.
@@ -455,6 +509,7 @@ export class AudioEngine {
     const duration = fadeDuration;
     const { fadeIn, fadeOut } = equalPowerCurves(duration);
     const outgoing = this.decks[this.active];
+    this.resetFx(deck, ctx.currentTime);
 
     outgoing.gain.gain.cancelScheduledValues(fadeStartAbs);
     outgoing.gain.gain.setValueAtTime(1, fadeStartAbs);
@@ -464,11 +519,55 @@ export class AudioEngine {
     deck.gain.gain.setValueAtTime(0, fadeStartAbs);
     deck.gain.gain.setValueCurveAtTime(fadeIn, fadeStartAbs, duration);
 
+    // Traitement propre au style de transition (bass swap, filtre, écho).
+    const profile = transitionProfile(
+      this.nextTransition?.style,
+      outgoing.track?.bpm ?? 0,
+      duration,
+    );
+    const fadeEndAbs = fadeStartAbs + duration;
+
+    if (profile.outBassGain !== 0) {
+      outgoing.low.gain.setValueAtTime(0, fadeStartAbs);
+      outgoing.low.gain.linearRampToValueAtTime(profile.outBassGain, fadeStartAbs + duration * 0.5);
+      deck.low.gain.setValueAtTime(profile.inBassGain, fadeStartAbs);
+      deck.low.gain.linearRampToValueAtTime(0, fadeStartAbs + duration * 0.75);
+    }
+
+    if (profile.outLowpassEnd !== null) {
+      outgoing.lowpass.frequency.setValueAtTime(20000, fadeStartAbs);
+      outgoing.lowpass.frequency.exponentialRampToValueAtTime(
+        profile.outLowpassEnd,
+        fadeEndAbs,
+      );
+    }
+
+    if (profile.echoWet > 0) {
+      outgoing.delay.delayTime.setValueAtTime(profile.echoDelay, fadeStartAbs);
+      outgoing.feedback.gain.setValueAtTime(0.38, fadeStartAbs);
+      outgoing.wet.gain.setValueAtTime(0, fadeStartAbs);
+      outgoing.wet.gain.linearRampToValueAtTime(profile.echoWet, fadeEndAbs);
+    }
+
     // Transition IA : pour un cut, on force la coupure immédiate du sortant
     // (pas de fondu progressif). Pour les autres styles, on garde le fondu croisé.
     if (this.nextTransition?.style === 'cut') {
       outgoing.gain.gain.cancelScheduledValues(fadeStartAbs);
       outgoing.gain.gain.setValueAtTime(0, fadeStartAbs);
+    }
+  }
+
+  /** Remet à plat les traitements d'un deck (graves, passe-bas, écho). */
+  private resetFx(deck: Deck, at: number, keepEcho = false): void {
+    deck.low.gain.cancelScheduledValues(at);
+    deck.low.gain.setValueAtTime(0, at);
+    deck.lowpass.frequency.cancelScheduledValues(at);
+    deck.lowpass.frequency.setValueAtTime(20000, at);
+    deck.feedback.gain.cancelScheduledValues(at);
+    deck.feedback.gain.setValueAtTime(0, at);
+    if (!keepEcho) {
+      deck.wet.gain.cancelScheduledValues(at);
+      deck.wet.gain.setValueAtTime(0, at);
     }
   }
 
@@ -485,6 +584,16 @@ export class AudioEngine {
     }
     outgoing.gain.gain.cancelScheduledValues(now);
     outgoing.gain.gain.setValueAtTime(1, now);
+    // Filtres remis à plat tout de suite, mais la queue d'écho s'éteint en douceur.
+    outgoing.low.gain.cancelScheduledValues(now);
+    outgoing.low.gain.setValueAtTime(0, now);
+    outgoing.lowpass.frequency.cancelScheduledValues(now);
+    outgoing.lowpass.frequency.setValueAtTime(20000, now);
+    outgoing.feedback.gain.cancelScheduledValues(now);
+    outgoing.feedback.gain.setValueAtTime(0, now);
+    outgoing.wet.gain.cancelScheduledValues(now);
+    outgoing.wet.gain.setValueAtTime(outgoing.wet.gain.value, now);
+    outgoing.wet.gain.linearRampToValueAtTime(0, now + 0.8);
     outgoing.track = null;
     // Repasse en vitesse naturelle (le tempo ajusté ne doit pas fuiter).
     outgoing.rate = 1;
