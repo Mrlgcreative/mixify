@@ -3,6 +3,7 @@ import { Check, Download, GripVertical, Heart, ListPlus, Loader2, MessageCircle,
 
 import { Cover } from './Cover';
 import { useConfirm } from './ConfirmDialog';
+import { useToast } from './Toast';
 import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { useLibraryStore } from '../../store/libraryStore';
 import { usePlayer } from '../../store/playerStore';
@@ -56,11 +57,10 @@ export function TrackList({
 
   const [downloads, setDownloads] = useState(() => listDownloads());
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
   const ask = useConfirm();
+  const toast = useToast();
 
   const toggleDownload = async (track: Track) => {
-    setDownloadError(null);
     const isSaved = downloads.some((entry) => entry.track.id === track.id);
     if (isSaved) {
       const ok = await ask({
@@ -73,11 +73,16 @@ export function TrackList({
     }
     setBusyId(track.id);
     try {
-      if (isSaved) await removeDownload(track.id);
-      else await downloadTrack(track);
+      if (isSaved) {
+        await removeDownload(track.id);
+        toast.success('Téléchargement supprimé.');
+      } else {
+        await downloadTrack(track);
+        toast.success(`« ${track.title} » disponible hors ligne.`);
+      }
       setDownloads(listDownloads());
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : 'Téléchargement impossible.');
+      toast.error(error instanceof Error ? error.message : 'Téléchargement impossible.');
     } finally {
       setBusyId(null);
     }
@@ -267,7 +272,6 @@ export function TrackList({
         );
       })}
     </ul>
-    {downloadError && <p className="px-2 py-2 text-xs text-danger">{downloadError}</p>}
     </>
   );
 }

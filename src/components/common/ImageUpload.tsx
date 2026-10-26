@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Camera, Loader2, Upload } from 'lucide-react';
 import { api } from '../../api/musicApi';
+import { useToast } from './Toast';
 
 interface ImageUploadProps {
   value?: string;
@@ -23,24 +24,24 @@ export function ImageUpload({
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setError('Seules les images sont acceptées');
+      toast.error('Seules les images sont acceptées.');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError('Fichier trop volumineux (max 5MB)');
+      toast.error('Fichier trop volumineux (5 Mo maximum).');
       return;
     }
-    setError(null);
     setUploading(true);
     try {
       const url = await api.uploadImage(file, folder);
       onChange(url);
+      toast.success('Image téléversée.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Échec du téléversement');
+      toast.error(err instanceof Error ? err.message : 'Échec du téléversement');
     } finally {
       setUploading(false);
     }
@@ -89,7 +90,6 @@ export function ImageUpload({
           e.target.value = '';
         }}
       />
-      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }

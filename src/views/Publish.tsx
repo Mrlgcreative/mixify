@@ -4,6 +4,7 @@ import { Loader2, Music4, Upload } from 'lucide-react';
 import { api, type PublishStage } from '../api/musicApi';
 import { useConfirm } from '../components/common/ConfirmDialog';
 import { ImageUpload } from '../components/common/ImageUpload';
+import { useToast } from '../components/common/Toast';
 
 const inputClass =
   'w-full rounded-card border border-line bg-elevated px-3 py-2.5 text-sm text-white placeholder:text-muted focus:border-primary focus:outline-none';
@@ -21,9 +22,8 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<PublishStage | null>(null);
   const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
   const ask = useConfirm();
+  const toast = useToast();
 
   // Libère l'URL locale du fichier précédent (et au démontage).
   useEffect(() => () => {
@@ -31,8 +31,6 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
   }, [preview]);
 
   const choose = (next: File | null) => {
-    setError(null);
-    setDone(null);
     setFile(next);
     setPreview(next ? URL.createObjectURL(next) : '');
     setDuration(0);
@@ -41,7 +39,7 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
 
   const onFile = (next: File | null) => {
     if (next && next.type && !next.type.startsWith('audio/')) {
-      setError('Choisis un fichier audio (mp3, wav, m4a, ogg, flac).');
+      toast.error('Choisis un fichier audio (mp3, wav, m4a, ogg, flac).');
       return;
     }
     choose(next);
@@ -61,8 +59,6 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
     setBusy(true);
     setStage(null);
     setProgress(0);
-    setError(null);
-    setDone(null);
     try {
       const track = await api.uploadTrack(
         file,
@@ -82,12 +78,10 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
       setCover('');
       setBpm('');
       setYear('');
-      setDone(
-        `« ${track.title} » est publié : fichier contrôlé et ajouté aux nouveautés.`,
-      );
+      toast.success(`« ${track.title} » est publié.`);
       onPublished?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publication impossible');
+      toast.error(err instanceof Error ? err.message : 'Publication impossible');
     } finally {
       setBusy(false);
       setStage(null);
@@ -189,9 +183,6 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
             className={inputClass}
           />
         </div>
-
-        {error && <p className="text-sm text-danger">{error}</p>}
-        {done && <p className="text-sm text-primary">{done}</p>}
 
         <button
           type="submit"

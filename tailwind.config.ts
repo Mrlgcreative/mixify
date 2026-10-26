@@ -44,10 +44,15 @@ export default {
           '0%, 100%': { transform: 'scaleY(0.35)' },
           '50%': { transform: 'scaleY(1)' },
         },
+        'toast-in': {
+          '0%': { opacity: '0', transform: 'translateY(-8px) scale(0.98)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
       },
       animation: {
         'neon-pulse': 'neon-pulse 1.8s ease-in-out infinite',
         'equalizer': 'equalizer 0.9s ease-in-out infinite',
+        'toast-in': 'toast-in 0.18s ease-out',
       },
     },
   },

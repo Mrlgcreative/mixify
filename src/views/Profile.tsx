@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   BarChart3,
-  Check,
   Heart,
   History,
   ListMusic,
@@ -15,6 +14,7 @@ import {
 
 import { api } from '../api/musicApi';
 import { useConfirm } from '../components/common/ConfirmDialog';
+import { useToast } from '../components/common/Toast';
 import { AutoMixToggle } from '../components/AutoMix/AutoMixToggle';
 import { CrossfadeSettings } from '../components/AutoMix/CrossfadeSettings';
 import { Cover } from '../components/common/Cover';
@@ -151,7 +151,7 @@ function AccountTab({ user }: { user: AuthUser }) {
   const [bio, setBio] = useState(user.bio ?? '');
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const toast = useToast();
 
   // Après un enregistrement, le store renvoie l'utilisateur à jour.
   useEffect(() => {
@@ -168,7 +168,7 @@ function AccountTab({ user }: { user: AuthUser }) {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!name.trim()) {
-      setMessage({ kind: 'error', text: 'Le nom est requis.' });
+      toast.error('Le nom est requis.');
       return;
     }
     const ok = await ask({
@@ -178,7 +178,6 @@ function AccountTab({ user }: { user: AuthUser }) {
     });
     if (!ok) return;
     setBusy(true);
-    setMessage(null);
     try {
       const updated = await api.updateProfile({
         name: name.trim(),
@@ -186,12 +185,9 @@ function AccountTab({ user }: { user: AuthUser }) {
         avatarUrl: avatarUrl.trim(),
       });
       setUser(updated);
-      setMessage({ kind: 'ok', text: 'Profil mis à jour.' });
+      toast.success('Profil mis à jour.');
     } catch (error) {
-      setMessage({
-        kind: 'error',
-        text: error instanceof Error ? error.message : 'Mise à jour impossible.',
-      });
+      toast.error(error instanceof Error ? error.message : 'Mise à jour impossible.');
     } finally {
       setBusy(false);
     }
@@ -241,16 +237,6 @@ function AccountTab({ user }: { user: AuthUser }) {
           >
             {busy ? 'Enregistrement…' : 'Enregistrer'}
           </button>
-          {message && (
-            <span
-              className={`flex items-center gap-1 text-xs ${
-                message.kind === 'ok' ? 'text-primary' : 'text-danger'
-              }`}
-            >
-              {message.kind === 'ok' && <Check size={14} />}
-              {message.text}
-            </span>
-          )}
         </div>
       </form>
 
@@ -399,8 +385,8 @@ function HistoryTab({
 }) {
   const playTrack = usePlayer((s) => s.playTrack);
   const ask = useConfirm();
+  const toast = useToast();
   const [clearing, setClearing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const clear = async () => {
     const ok = await ask({
@@ -411,12 +397,12 @@ function HistoryTab({
     });
     if (!ok) return;
     setClearing(true);
-    setError(null);
     try {
       await api.clearHistory();
       onCleared();
+      toast.success('Historique effacé.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Suppression impossible');
+      toast.error(err instanceof Error ? err.message : 'Suppression impossible');
     } finally {
       setClearing(false);
     }
@@ -441,7 +427,6 @@ function HistoryTab({
         </button>
       </div>
 
-      {error && <p className="mb-3 text-sm text-danger">{error}</p>}
       {history.loading && !history.data ? (
         <Loading label="Chargement de l’historique…" />
       ) : entries.length === 0 ? (
@@ -567,8 +552,14 @@ function TopList({
 function FollowersTab({ onNavigate }: { onNavigate: (view: ViewName) => void }) {
   const user = useAuthStore((s) => s.user);
   const { following, followers, myArtist, loaded, error } = useFollows();
+  const toast = useToast();
   const canPublish =
     user?.role === 'artiste' || user?.role === 'developper' || user?.role === 'admin';
+
+  // Les erreurs d'abonnement viennent du store : on les remonte en notification.
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error, toast]);
 
   if (!loaded) return <Loading label="Chargement des abonnements…" />;
 
@@ -669,7 +660,6 @@ function FollowersTab({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
         )}
       </section>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
 }

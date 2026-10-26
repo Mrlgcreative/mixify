@@ -20,6 +20,7 @@ import { Cover } from '../components/common/Cover';
 import { useConfirm } from '../components/common/ConfirmDialog';
 import { Skeleton, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
+import { useToast } from '../components/common/Toast';
 import { useMyArtist, useArtistStats } from '../hooks/useMusicApi';
 import type {
   ArtistDashboard,
@@ -440,8 +441,8 @@ function TracksTab({
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Track | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const ask = useConfirm();
+  const toast = useToast();
 
   const filtered = tracks.filter((track) =>
     [track.title, track.album?.title, track.genre]
@@ -460,13 +461,13 @@ function TracksTab({
       danger: true,
     });
     if (!ok) return;
-    setError(null);
     setRemoving(track.id);
     try {
       await api.deleteTrack(track.id);
       onRefresh();
+      toast.success(`« ${track.title} » supprimé.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Suppression impossible');
+      toast.error(err instanceof Error ? err.message : 'Suppression impossible');
     } finally {
       setRemoving(null);
     }
@@ -500,8 +501,6 @@ function TracksTab({
           </button>
         </div>
       </div>
-
-      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
 
       <div className="mt-4">
         {filtered.length > 0 ? (
@@ -575,8 +574,8 @@ function TrackEditDialog({
   const [bpm, setBpm] = useState(track.bpm?.toString() ?? '');
   const [year, setYear] = useState(track.year?.toString() ?? '');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const ask = useConfirm();
+  const toast = useToast();
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -596,7 +595,6 @@ function TrackEditDialog({
     });
     if (!ok) return;
     setBusy(true);
-    setError(null);
     const input: TrackInput = {
       title: title.trim(),
       album: album.trim() || undefined,
@@ -608,8 +606,9 @@ function TrackEditDialog({
     try {
       await api.updateTrack(track.id, input);
       onSaved();
+      toast.success('Morceau mis à jour.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Enregistrement impossible');
+      toast.error(err instanceof Error ? err.message : 'Enregistrement impossible');
     } finally {
       setBusy(false);
     }
@@ -709,8 +708,6 @@ function TrackEditDialog({
           </div>
         </div>
 
-        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
@@ -755,9 +752,8 @@ function ProfileForm({
     socialLinks: artist?.socialLinks ?? '',
   });
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
   const ask = useConfirm();
+  const toast = useToast();
   const [_verifyForm, _setVerifyForm] = useState({
     instagram_url: '',
     tiktok_url: '',
@@ -788,15 +784,13 @@ function ProfileForm({
       if (!ok) return;
     }
     setBusy(true);
-    setError(null);
-    setDone(null);
     try {
       if (artist) await api.updateArtist(artist.id, input);
       else await api.createArtist(input);
-      setDone(artist ? 'Profil mis à jour.' : 'Profil artiste créé.');
+      toast.success(artist ? 'Profil artiste mis à jour.' : 'Profil artiste créé.');
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Enregistrement impossible');
+      toast.error(err instanceof Error ? err.message : 'Enregistrement impossible');
     } finally {
       setBusy(false);
     }
@@ -903,9 +897,6 @@ function ProfileForm({
             className={inputClass}
           />
         </label>
-
-        {error && <p className="text-sm text-danger">{error}</p>}
-        {done && <p className="text-sm text-primary">{done}</p>}
 
         <div className="flex items-center gap-3">
           <button

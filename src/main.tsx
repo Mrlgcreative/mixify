@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
 import { ConfirmProvider } from './components/common/ConfirmDialog';
+import { ToastProvider } from './components/common/Toast';
 import { applySimpleMode, getSimpleMode } from './theme/theme';
 
 const container = document.getElementById('root');
@@ -20,7 +21,9 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 createRoot(container).render(
   <StrictMode>
     <ConfirmProvider>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </ConfirmProvider>
   </StrictMode>,
 );

@@ -7,6 +7,7 @@ import { MediaCard } from '../components/common/MediaCard';
 import { useConfirm } from '../components/common/ConfirmDialog';
 import { Skeleton, SkeletonCard } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
+import { useToast } from '../components/common/Toast';
 import { useLibrary, usePlaylist, useTracks } from '../hooks/useMusicApi';
 import { useLibraryStore } from '../store/libraryStore';
 import { usePlayer } from '../store/playerStore';
@@ -68,21 +69,21 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const toast = useToast();
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const nom = name.trim();
     if (!nom) return;
     setBusy(true);
-    setCreateError(null);
     try {
       await api.createPlaylist(nom);
       playlistsChanged();
       setName('');
       setCreating(false);
+      toast.success(`Playlist « ${nom} » créée.`);
     } catch (err) {
-      setCreateError(message(err, 'Création impossible'));
+      toast.error(message(err, 'Création impossible'));
     } finally {
       setBusy(false);
     }
@@ -165,7 +166,6 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
             type="button"
             onClick={() => {
               setCreating((value) => !value);
-              setCreateError(null);
             }}
             className="flex items-center gap-2 rounded-full bg-elevated px-4 py-2 text-sm font-semibold text-white transition hover:bg-line"
           >
@@ -194,7 +194,6 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
               type="button"
               onClick={() => {
                 setCreating(false);
-                setCreateError(null);
               }}
               className="text-sm text-muted transition hover:text-white"
             >
@@ -202,8 +201,6 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
             </button>
           </form>
         )}
-        {createError && <p className="mb-4 text-xs text-danger">{createError}</p>}
-
         {data.playlists.length === 0 ? (
           <p className="text-sm text-muted">Aucune playlist. Crée-en une pour regrouper tes morceaux.</p>
         ) : (
@@ -230,21 +227,21 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
   const playTrack = usePlayer((s) => s.playTrack);
   const playlistsChanged = useLibraryStore((s) => s.playlistsChanged);
   const ask = useConfirm();
+  const toast = useToast();
 
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
 
-  const run = async (action: () => Promise<void>, fallback: string) => {
+  const run = async (action: () => Promise<void>, success: string, fallback: string) => {
     setBusy(true);
-    setActionError(null);
     try {
       await action();
       playlistsChanged();
+      toast.success(success);
       return true;
     } catch (err) {
-      setActionError(message(err, fallback));
+      toast.error(message(err, fallback));
       return false;
     } finally {
       setBusy(false);
@@ -282,7 +279,7 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
     event.preventDefault();
     const nom = name.trim();
     if (!nom) return;
-    if (await run(() => api.renamePlaylist(id, nom), 'Renommage impossible')) setRenaming(false);
+    if (await run(() => api.renamePlaylist(id, nom), 'Playlist renommée.', 'Renommage impossible')) setRenaming(false);
   };
 
   const removePlaylist = async () => {
@@ -293,7 +290,7 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
       danger: true,
     });
     if (!ok) return;
-    if (await run(() => api.deletePlaylist(id), 'Suppression impossible')) onBack();
+    if (await run(() => api.deletePlaylist(id), 'Playlist supprimée.', 'Suppression impossible')) onBack();
   };
 
   return (
@@ -374,8 +371,6 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
         </div>
       </div>
 
-      {actionError && <p className="mt-3 text-xs text-danger">{actionError}</p>}
-
       <div className="mt-6">
         {playlist.tracks.length > 0 ? (
           <TrackList
@@ -393,6 +388,7 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
                 if (!ok) return;
                 await run(
                   () => api.removeTrackFromPlaylist(track.playlistEntryId as string),
+                  'Morceau retiré de la playlist.',
                   'Retrait impossible',
                 );
               })();
@@ -423,7 +419,11 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
                 <button
                   type="button"
                   onClick={() =>
-                    void run(() => api.addTrackToPlaylist(id, track.id), 'Ajout impossible')
+                    void run(
+                      () => api.addTrackToPlaylist(id, track.id),
+                      'Morceau ajouté à la playlist.',
+                      'Ajout impossible',
+                    )
                   }
                   disabled={busy}
                   title="Ajouter à la playlist"

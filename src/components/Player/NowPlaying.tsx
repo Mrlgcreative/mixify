@@ -3,6 +3,7 @@ import { Check, ChevronDown, Download, FileText, Heart, ListMusic, Loader2, Paus
 
 import { Cover } from '../common/Cover';
 import { useConfirm } from '../common/ConfirmDialog';
+import { useToast } from '../common/Toast';
 import { downloadTrack, listDownloads, removeDownload } from '../../audio/offline';
 import { usePlayer } from '../../store/playerStore';
 import { useFollows } from '../../store/followsStore';
@@ -83,8 +84,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [lyricsError, setLyricsError] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ bytes?: number } | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
   const ask = useConfirm();
+  const toast = useToast();
 
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
@@ -93,7 +94,6 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     setLyricsError(null);
     setLyricsLoading(false);
     setShowLyricsSheet(false);
-    setDownloadError(null);
     const entry = currentTrack
       ? listDownloads().find((item) => item.track.id === currentTrack.id)
       : undefined;
@@ -156,19 +156,20 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
       });
       if (!ok) return;
     }
-    setDownloadError(null);
     setDownloadBusy(true);
     try {
       if (saved) {
         await removeDownload(currentTrack.id);
         setSaved(null);
+        toast.success('Téléchargement supprimé.');
       } else {
         await downloadTrack(currentTrack);
         const entry = listDownloads().find((item) => item.track.id === currentTrack.id);
         setSaved(entry ? { bytes: entry.bytes } : {});
+        toast.success(`« ${currentTrack.title} » disponible hors ligne.`);
       }
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : 'Téléchargement impossible.');
+      toast.error(error instanceof Error ? error.message : 'Téléchargement impossible.');
     } finally {
       setDownloadBusy(false);
     }
@@ -373,9 +374,6 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               />
             </div>
           </div>
-          {downloadError && (
-            <p className="pb-1 text-center text-[11px] text-danger">{downloadError}</p>
-          )}
         </div>
       </main>
 

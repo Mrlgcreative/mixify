@@ -22,6 +22,7 @@ import {
   type VerificationRequest,
 } from '../api/adminApi';
 import { useConfirm } from '../components/common/ConfirmDialog';
+import { useToast } from '../components/common/Toast';
 import { useAsync } from '../hooks/useMusicApi';
 import { useAuthStore } from '../store/authStore';
 import type { Role } from '../types/auth';
@@ -220,9 +221,9 @@ const VERIFICATION_FILTERS: Array<{ value: VerificationRequest['status']; label:
 
 function VerificationsTab() {
   const ask = useConfirm();
+  const toast = useToast();
   const [status, setStatus] = useState<VerificationRequest['status']>('pending');
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const requests = useResource(() => adminApi.verificationRequests(status), [status]);
   const artists = useResource(() => adminApi.artists({ limit: 200 }), []);
@@ -245,12 +246,12 @@ function VerificationsTab() {
     if (!ok) return;
 
     setBusy(request.id);
-    setActionError(null);
     try {
       await adminApi.reviewVerification(request.id, next);
       requests.refresh();
+      toast.success(next === 'approved' ? 'Artiste certifié.' : 'Demande rejetée.');
     } catch (error) {
-      setActionError(message(error, 'Action impossible'));
+      toast.error(message(error, 'Action impossible'));
     } finally {
       setBusy(null);
     }
@@ -280,8 +281,6 @@ function VerificationsTab() {
           </button>
         ))}
       </div>
-
-      <ErrorText text={actionError} />
 
       {requests.loading && !requests.data ? (
         <Loading />
@@ -377,7 +376,7 @@ function UsersTab() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const toast = useToast();
 
   const users = useResource(
     () => adminApi.users({ search, role, status, page }),
@@ -402,12 +401,12 @@ function UsersTab() {
     if (!ok) return;
 
     setBusy(user.id);
-    setActionError(null);
     try {
       await adminApi.updateUser({ userId: user.id, ...input });
       users.refresh();
+      toast.success('Compte mis à jour.');
     } catch (error) {
-      setActionError(message(error, 'Modification impossible'));
+      toast.error(message(error, 'Modification impossible'));
     } finally {
       setBusy(null);
     }
@@ -425,12 +424,12 @@ function UsersTab() {
     if (!ok) return;
 
     setBusy(user.id);
-    setActionError(null);
     try {
       await adminApi.deleteUser(user.id);
       users.refresh();
+      toast.success('Compte supprimé.');
     } catch (error) {
-      setActionError(message(error, 'Suppression impossible'));
+      toast.error(message(error, 'Suppression impossible'));
     } finally {
       setBusy(null);
     }
@@ -484,7 +483,6 @@ function UsersTab() {
         </select>
       </div>
 
-      <ErrorText text={actionError} />
       <ListState state={users} />
 
       {users.data && users.data.items.length > 0 && (
@@ -567,7 +565,7 @@ function ArtistsTab() {
   const [verified, setVerified] = useState('');
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const toast = useToast();
 
   const artists = useResource(
     () => adminApi.artists({ search, verified, page }),
@@ -587,12 +585,12 @@ function ArtistsTab() {
     if (!ok) return;
 
     setBusy(artist.id);
-    setActionError(null);
     try {
       await adminApi.setArtistVerified(artist.id, next);
       artists.refresh();
+      toast.success(next ? 'Badge certifié accordé.' : 'Badge retiré.');
     } catch (error) {
-      setActionError(message(error, 'Action impossible'));
+      toast.error(message(error, 'Action impossible'));
     } finally {
       setBusy(null);
     }
@@ -609,12 +607,12 @@ function ArtistsTab() {
     if (!ok) return;
 
     setBusy(artist.id);
-    setActionError(null);
     try {
       await adminApi.deleteArtist(artist.id);
       artists.refresh();
+      toast.success('Profil artiste supprimé.');
     } catch (error) {
-      setActionError(message(error, 'Suppression impossible'));
+      toast.error(message(error, 'Suppression impossible'));
     } finally {
       setBusy(null);
     }
@@ -649,7 +647,6 @@ function ArtistsTab() {
         </select>
       </div>
 
-      <ErrorText text={actionError} />
       <ListState state={artists} />
 
       {artists.data && artists.data.items.length > 0 && (
@@ -709,7 +706,7 @@ function TracksTab() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const toast = useToast();
 
   const tracks = useResource(() => adminApi.tracks({ search, page }), [search, page]);
 
@@ -724,12 +721,12 @@ function TracksTab() {
     if (!ok) return;
 
     setBusy(track.id);
-    setActionError(null);
     try {
       await adminApi.deleteTrack(track.id);
       tracks.refresh();
+      toast.success('Morceau supprimé.');
     } catch (error) {
-      setActionError(message(error, 'Suppression impossible'));
+      toast.error(message(error, 'Suppression impossible'));
     } finally {
       setBusy(null);
     }
@@ -751,7 +748,6 @@ function TracksTab() {
         />
       </div>
 
-      <ErrorText text={actionError} />
       <ListState state={tracks} />
 
       {tracks.data && tracks.data.items.length > 0 && (
