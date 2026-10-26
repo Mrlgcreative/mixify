@@ -1,6 +1,27 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { Check, ChevronDown, Download, FileText, Heart, ListMusic, Loader2, Pause, Play, Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, X } from 'lucide-react';
+import {
+  BadgeCheck,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileText,
+  Heart,
+  ListMusic,
+  Loader2,
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  Share2,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  X,
+} from 'lucide-react';
 
+import { api } from '../../api/musicApi';
+import type { ArtistProfile } from '../../types/music';
 import { Cover } from '../common/Cover';
 import { useConfirm } from '../common/ConfirmDialog';
 import { useToast } from '../common/Toast';
@@ -15,6 +36,8 @@ import { shareTrackToWhatsApp } from '../../utils/share';
 interface NowPlayingProps {
   open: boolean;
   onClose: () => void;
+  /** Ouvre la fiche de l'artiste du morceau en cours. */
+  onOpenArtist: (artistId: string) => void;
 }
 
 /** Action du bas du lecteur : icône ronde, libellé court, détail optionnel. */
@@ -52,7 +75,7 @@ function ActionButton({
   );
 }
 
-export function NowPlaying({ open, onClose }: NowPlayingProps) {
+export function NowPlaying({ open, onClose, onOpenArtist }: NowPlayingProps) {
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
   const position = usePlayer((s) => s.position);
@@ -84,6 +107,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [lyricsError, setLyricsError] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ bytes?: number } | null>(null);
   const [downloadBusy, setDownloadBusy] = useState(false);
+  const [artistProfile, setArtistProfile] = useState<ArtistProfile | null>(null);
   const ask = useConfirm();
   const toast = useToast();
 
@@ -116,7 +140,35 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     };
   }, [currentTrack?.id, currentTrack?.album?.coverUrl, currentTrack?.coverUrl]);
 
+  // Fiche artiste complète (bio, photo, pays) : absente du morceau du catalogue.
+  useEffect(() => {
+    setArtistProfile(null);
+    if (!canFollow || !artistId) return;
+    let cancelled = false;
+    void api
+      .getArtist(artistId)
+      .then((profile) => {
+        if (!cancelled) setArtistProfile(profile);
+      })
+      .catch(() => {
+        // Pas de fiche : la section garde le nom et la photo du morceau.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [artistId, canFollow]);
+
   if (!open || !currentTrack) return null;
+
+  const followers = artistProfile?.followers ?? currentTrack.artist.followers ?? 0;
+  const aboutName = artistProfile?.name ?? currentTrack.artist.name;
+  const aboutMeta = [
+    artistProfile?.genres?.slice(0, 2).join(' · '),
+    artistProfile?.country,
+    followers > 0 ? `${followers.toLocaleString('fr-FR')} abonnés` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   const progress = duration > 0 ? (position / duration) * 100 : 0;
   const liked = Boolean(favorites[currentTrack.id]);
@@ -206,9 +258,9 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
         <span className="h-10 w-10" aria-hidden="true" />
       </header>
 
-      <main className="relative z-10 flex min-h-0 flex-1 flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+14px)]">
+      <main className="scrollbar-thin relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+14px)]">
         {/* Pochette : presque toute la largeur, réduite sur les écrans courts. */}
-        <div className="flex min-h-0 flex-1 items-center justify-center py-3">
+        <div className="flex shrink-0 grow items-center justify-center py-3">
           <div className="relative size-[min(82vw,46dvh)] max-w-[420px]">
             <div
               className="absolute -inset-6 rounded-[40px] opacity-70 blur-3xl"
@@ -375,6 +427,50 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             </div>
           </div>
         </div>
+
+        {canFollow && (
+          <section className="mt-2 shrink-0 border-t border-white/10 px-1 pt-5">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/40">
+              À propos de l'artiste
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                if (!artistId) return;
+                onClose();
+                onOpenArtist(artistId);
+              }}
+              className="mt-3 flex w-full items-center gap-3 text-left"
+            >
+              <Cover
+                seed={artistId ?? 'mixify'}
+                title={aboutName}
+                imageUrl={artistProfile?.imageUrl ?? currentTrack.artist.imageUrl}
+                rounded="full"
+                className="h-14 w-14 shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 text-[15px] font-semibold text-white">
+                  <span className="truncate">{aboutName}</span>
+                  {(artistProfile?.verified ?? currentTrack.artist.verified) && (
+                    <BadgeCheck
+                      size={15}
+                      className="shrink-0 text-primary"
+                      aria-label="Artiste certifié"
+                    />
+                  )}
+                </p>
+                {aboutMeta && <p className="truncate text-xs text-white/50">{aboutMeta}</p>}
+              </div>
+              <ChevronRight size={18} className="shrink-0 text-white/35" />
+            </button>
+            {artistProfile?.bio && (
+              <p className="mt-3 whitespace-pre-line text-[13px] leading-relaxed text-white/65">
+                {artistProfile.bio}
+              </p>
+            )}
+          </section>
+        )}
       </main>
 
       {showLyricsSheet && (

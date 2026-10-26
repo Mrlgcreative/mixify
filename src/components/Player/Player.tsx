@@ -9,8 +9,13 @@ import { NowPlaying } from './NowPlaying';
 import { usePlayer } from '../../store/playerStore';
 import { formatTime } from '../../utils/format';
 
+interface PlayerProps {
+  /** Ouvre la fiche artiste depuis le lecteur plein écran. */
+  onOpenArtist: (artistId: string) => void;
+}
+
 /** Barre de lecture fixe en bas de l'application. */
-export function Player() {
+export function Player({ onOpenArtist }: PlayerProps) {
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
   const position = usePlayer((s) => s.position);
@@ -191,7 +196,11 @@ export function Player() {
         </button>
       )}
       </footer>
-      <NowPlaying open={fullPlayerOpen} onClose={() => setFullPlayerOpen(false)} />
+      <NowPlaying
+        open={fullPlayerOpen}
+        onClose={() => setFullPlayerOpen(false)}
+        onOpenArtist={onOpenArtist}
+      />
     </>
   );
 }

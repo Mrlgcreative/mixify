@@ -227,7 +227,7 @@ export default function App() {
         {queueOpen && <QueuePanel />}
       </div>
 
-      <Player />
+      <Player onOpenArtist={openArtist} />
       <MobileNav view={playlistRoute ? 'library' : view} onNavigate={navigate} />
     </div>
   );

@@ -388,6 +388,8 @@ export interface MusicApi {
   /** Profil artiste + catalogue du compte connecté (null s'il n'y a pas encore de profil). */
   getMyArtist(): Promise<ArtistDashboard | null>;
   /** Vue d'ensemble des écoutes du catalogue (null s'il n'y a pas encore de profil). */
+  /** Profil public d'un artiste (bio, photo, pays, badge). */
+  getArtist(id: string): Promise<ArtistProfile>;
   getArtistStats(): Promise<ArtistStats | null>;
   createArtist(input: ArtistInput): Promise<ArtistProfile>;
   updateArtist(id: string, input: ArtistInput): Promise<ArtistProfile>;
@@ -755,6 +757,13 @@ class MixifyApi implements MusicApi {
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;
     }
+  }
+
+  async getArtist(id: string): Promise<ArtistProfile> {
+    const { artiste } = await request<{ artiste: ApiArtist }>(
+      `/api/artists/${encodeURIComponent(id)}`,
+    );
+    return toArtistProfile(artiste);
   }
 
   async getArtistStats(): Promise<ArtistStats | null> {
