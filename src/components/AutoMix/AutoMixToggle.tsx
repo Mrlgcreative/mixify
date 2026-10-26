@@ -22,29 +22,49 @@ function EqualizerIcon({ active }: { active: boolean }) {
   );
 }
 
+/** Badge « Mixage » affiché pendant une transition, comme sur Now Playing. */
+export function MixingBadge() {
+  return (
+    <span
+      role="status"
+      className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+    >
+      <EqualizerIcon active />
+      Mixage
+    </span>
+  );
+}
+
 /**
- * Bascule Auto-Mix.
- * Activée : dégradé néon + halo pulsé. Désactivée : simple contour discret.
+ * Bascule AutoMix du lecteur : Off ↔ AutoMix (le Crossfade reste un choix des
+ * paramètres). Activée : dégradé néon + halo pulsé.
  */
 export function AutoMixToggle() {
-  const autoMix = usePlayer((s) => s.autoMix);
-  const setAutoMix = usePlayer((s) => s.setAutoMix);
+  const transitionStyle = usePlayer((s) => s.transitionStyle);
+  const setTransitionStyle = usePlayer((s) => s.setTransitionStyle);
+  const active = transitionStyle === 'automix';
 
   return (
     <button
       type="button"
-      onClick={() => setAutoMix(!autoMix)}
-      aria-pressed={autoMix}
-      title="Auto-Mix : enchaînement automatique avec fondu intelligent"
+      onClick={() => setTransitionStyle(active ? 'off' : 'automix')}
+      aria-pressed={active}
+      title={
+        active
+          ? "Désactiver l'AutoMix"
+          : transitionStyle === 'crossfade'
+            ? "Passer à l'AutoMix (remplace le fondu enchaîné)"
+            : 'Activer l’AutoMix : enchaînement beatmatché, comme Apple Music'
+      }
       className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-        autoMix
+        active
           ? 'animate-neon-pulse border-transparent bg-neon text-white'
           : 'border-line bg-elevated text-subtle hover:text-white'
       }`}
     >
       <Sparkles size={14} />
-      <EqualizerIcon active={autoMix} />
-      <span className="hidden sm:inline">Auto-Mix</span>
+      <EqualizerIcon active={active} />
+      <span className="hidden sm:inline">AutoMix</span>
     </button>
   );
 }

@@ -1,8 +1,7 @@
 import { Settings2, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
-import { CrossfadeSettings } from '../AutoMix/CrossfadeSettings';
-import { AutoMixToggle } from '../AutoMix/AutoMixToggle';
+import { TransitionSettings } from '../AutoMix/TransitionSettings';
 import { TrackList } from '../common/TrackList';
 import { AccentSettings } from '../settings/AccentSettings';
 import { usePlayer } from '../../store/playerStore';
@@ -75,11 +74,7 @@ export function QueuePanel() {
         </div>
       ) : (
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-          <div className="border-b border-line px-4 py-4 lg:hidden">
-            <AutoMixToggle />
-          </div>
-
-          <CrossfadeSettings />
+          <TransitionSettings />
 
           <div className="border-t border-line">
             <AccentSettings />

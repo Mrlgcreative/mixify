@@ -4,7 +4,7 @@ import { api } from '../api/musicApi';
 import { engine } from '../audio/engine';
 import { offlineUrl } from '../audio/offline';
 import { MAX_CROSSFADE_SECONDS, MIN_CROSSFADE_SECONDS } from '../audio/crossfade';
-import type { MixPlan, PlayerState, RepeatMode, Track } from '../types/music';
+import type { MixPlan, PlayerState, RepeatMode, Track, TransitionMode } from '../types/music';
 
 const mediaSession = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
 let wakeLock: WakeLockSentinel | null = null;
@@ -66,7 +66,8 @@ async function releaseWakeLock(): Promise<void> {
  *
  * Le store ne manipulate jamais le DOM audio : il pilote `engine` (Web Audio)
  * et conserve l'état UI (file d'attente, modes, volume, progression).
- * L'Auto-Mix n'est qu'un couple de réglages (on/off + durée) transmis au moteur.
+ * L'Auto-Mix n'est qu'un mode de transition (`off` / `automix` / `crossfade`,
+ * plus la durée fixe du crossfade) transmis au moteur.
  */
 
 interface PlayerStore extends PlayerState {
@@ -92,7 +93,7 @@ interface PlayerStore extends PlayerState {
   toggleMute: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
-  setAutoMix: (enabled: boolean) => void;
+  setTransitionStyle: (style: TransitionMode) => void;
   setCrossfadeSeconds: (seconds: number) => void;
   toggleQueue: () => void;
   reorderQueue: (from: number, to: number) => void;
@@ -106,16 +107,37 @@ const SETTINGS_KEY = 'mixify.settings';
 
 interface PersistedSettings {
   volume: number;
-  autoMix: boolean;
+  transitionStyle: TransitionMode;
   crossfadeSeconds: number;
 }
 
+const TRANSITION_MODES: TransitionMode[] = ['off', 'automix', 'crossfade'];
+
 function loadSettings(): PersistedSettings {
-  const fallback: PersistedSettings = { volume: 0.8, autoMix: true, crossfadeSeconds: 8 };
+  const fallback: PersistedSettings = { volume: 0.8, transitionStyle: 'automix', crossfadeSeconds: 8 };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return fallback;
-    return { ...fallback, ...(JSON.parse(raw) as Partial<PersistedSettings>) };
+    // `autoMix` (booléen) vient des anciens réglages : on le migre.
+    const stored = JSON.parse(raw) as Partial<PersistedSettings> & { autoMix?: boolean };
+    const transitionStyle = TRANSITION_MODES.includes(stored.transitionStyle as TransitionMode)
+      ? (stored.transitionStyle as TransitionMode)
+      : typeof stored.autoMix === 'boolean'
+        ? stored.autoMix
+          ? 'automix'
+          : 'off'
+        : fallback.transitionStyle;
+    return {
+      volume: typeof stored.volume === 'number' ? stored.volume : fallback.volume,
+      transitionStyle,
+      crossfadeSeconds:
+        typeof stored.crossfadeSeconds === 'number'
+          ? Math.max(
+              MIN_CROSSFADE_SECONDS,
+              Math.min(MAX_CROSSFADE_SECONDS, stored.crossfadeSeconds),
+            )
+          : fallback.crossfadeSeconds,
+    };
   } catch {
     return fallback;
   }
@@ -127,6 +149,12 @@ function saveSettings(settings: PersistedSettings): void {
   } catch {
     /* stockage indisponible (mode privé) : on ignore */
   }
+}
+
+/** Persiste les réglages courants du store (volume + transition). */
+function persistSettings(get: () => PlayerStore): void {
+  const { volume, transitionStyle, crossfadeSeconds } = get();
+  saveSettings({ volume, transitionStyle, crossfadeSeconds });
 }
 
 /** Choisit le prochain titre en fonction du mode aléatoire et de la répétition. */
@@ -247,6 +275,8 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       void prepareNext();
     },
     onError: (message) => set({ notice: message }),
+    onMixStart: () => set({ mixing: true }),
+    onMixEnd: () => set({ mixing: false }),
   });
 
   if (mediaSession) {
@@ -283,7 +313,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
   }
 
   engine.setVolume(initialSettings.volume);
-  engine.setAutoMix(initialSettings.autoMix, initialSettings.crossfadeSeconds);
+  engine.setTransition(initialSettings.transitionStyle, initialSettings.crossfadeSeconds);
 
   return {
     queue: [],
@@ -296,8 +326,9 @@ export const usePlayer = create<PlayerStore>((set, get) => {
     muted: false,
     position: 0,
     duration: 0,
-    autoMix: initialSettings.autoMix,
+    transitionStyle: initialSettings.transitionStyle,
     crossfadeSeconds: initialSettings.crossfadeSeconds,
+    mixing: false,
     queueOpen: false,
     notice: null,
     pendingIndex: null,
@@ -413,7 +444,7 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       const volume = Math.max(0, Math.min(1, value));
       engine.setVolume(volume);
       set({ volume, muted: volume === 0 });
-      saveSettings({ volume, autoMix: get().autoMix, crossfadeSeconds: get().crossfadeSeconds });
+      persistSettings(get);
     },
 
     toggleMute() {
@@ -434,19 +465,19 @@ export const usePlayer = create<PlayerStore>((set, get) => {
       void prepareNext();
     },
 
-    setAutoMix(enabled) {
+    setTransitionStyle(style) {
       const { crossfadeSeconds } = get();
-      engine.setAutoMix(enabled, crossfadeSeconds);
-      set({ autoMix: enabled });
-      saveSettings({ volume: get().volume, autoMix: enabled, crossfadeSeconds });
+      engine.setTransition(style, crossfadeSeconds);
+      set({ transitionStyle: style });
+      persistSettings(get);
     },
 
     setCrossfadeSeconds(seconds) {
       const value = Math.max(MIN_CROSSFADE_SECONDS, Math.min(MAX_CROSSFADE_SECONDS, seconds));
-      const { autoMix } = get();
-      engine.setAutoMix(autoMix, value);
+      const { transitionStyle } = get();
+      engine.setTransition(transitionStyle, value);
       set({ crossfadeSeconds: value });
-      saveSettings({ volume: get().volume, autoMix, crossfadeSeconds: value });
+      persistSettings(get);
     },
 
     toggleQueue() {

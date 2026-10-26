@@ -8,9 +8,21 @@
 /** Hypothèse métrique : 4 temps par mesure. */
 export const BEATS_PER_BAR = 4;
 
-/** Bornes du réglage utilisateur (secondes). */
-export const MIN_CROSSFADE_SECONDS = 0;
+/** Bornes du réglage utilisateur du fondu enchaîné (secondes). */
+export const MIN_CROSSFADE_SECONDS = 1;
 export const MAX_CROSSFADE_SECONDS = 12;
+
+/**
+ * AutoMix façon Apple Music : la durée n'est pas réglée par l'utilisateur mais
+ * déduite de la musique. On vise 4 mesures, bornées pour rester un fondu.
+ */
+export const AUTOMIX_BARS = 4;
+export const AUTOMIX_MIN_SECONDS = 4;
+export const AUTOMIX_MAX_SECONDS = 12;
+/** Fondu court quand tempo (ou style) ne se prête pas au beat-match. */
+export const AUTOMIX_SHORT_SECONDS = 1.2;
+/** Deux titres d'un même album s'enchaînent sans mix dynamique (gapless). */
+export const ALBUM_GAP_SECONDS = 0.3;
 
 /** Durée d'une pulsation (s). */
 export function beatInterval(bpm: number): number {
@@ -33,6 +45,49 @@ export function tempoRatio(outBpm: number, inBpm: number, maxDeviation = 0.08): 
   return Math.min(1 + maxDeviation, Math.max(1 - maxDeviation, ratio));
 }
 
+/** Ramène un BPM annoncé dans la plage musicale 70–180 (256 → 128, 45 → 90). */
+export function normalizeBpm(bpm: number | null | undefined): number {
+  if (!bpm || bpm <= 0) return 0;
+  let value = bpm;
+  while (value < 70) value *= 2;
+  while (value > 180) value /= 2;
+  return value;
+}
+
+/**
+ * Rapproche le BPM entrant du sortant à l'octave la plus proche (×0,5/×1/×2).
+ * Les analyseurs et l'API sortent parfois le double ou la moitié du tempo :
+ * 174 contre 87 BPM est un enchaînement valable (double-croche), pas un écart
+ * de 100 %.
+ */
+export function matchOctave(outBpm: number, inBpm: number): number {
+  if (!outBpm || !inBpm || outBpm <= 0 || inBpm <= 0) return inBpm;
+  let best = inBpm;
+  let bestDistance = Infinity;
+  for (const factor of [0.5, 1, 2]) {
+    const candidate = inBpm * factor;
+    const distance = Math.abs(Math.log(candidate / outBpm));
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** Les deux titres peuvent-ils être beatmatchés sans déformation audible ? */
+export function tempoCompatible(outBpm: number, inBpm: number, maxDeviation = 0.08): boolean {
+  if (!outBpm || !inBpm || outBpm <= 0 || inBpm <= 0) return false;
+  return Math.abs(matchOctave(outBpm, inBpm) / outBpm - 1) <= maxDeviation;
+}
+
+/** Durée du fondu AutoMix : 4 mesures du titre sortant, bornée à 4–12 s. */
+export function autoMixDuration(outBpm: number): number {
+  if (!outBpm || outBpm <= 0) return AUTOMIX_MIN_SECONDS;
+  const bars = barInterval(outBpm) * AUTOMIX_BARS;
+  return Math.min(AUTOMIX_MAX_SECONDS, Math.max(AUTOMIX_MIN_SECONDS, bars));
+}
+
 /**
  * Courbes de volume à puissance constante (equal-power).
  * `sin`/`cos` garantissent une somme d'énergie constante : le niveau perçu ne
@@ -53,28 +108,6 @@ export function equalPowerCurves(
   // l'étalement temporel), on le garde dans la signature pour documenter l'usage.
   void duration;
   return { fadeIn, fadeOut };
-}
-
-/**
- * Durée de fondu réellement appliquée :
- *  - un `cut` est quasi instantané (0,08 s, juste de quoi éviter le clic) ;
- *  - une durée proposée par l'IA est bornée à 1–16 s ;
- *  - sinon on garde le réglage utilisateur.
- * Dans tous les cas, jamais plus que ce qu'il reste à jouer.
- */
-export function resolveFadeDuration(
-  transition: { style: string; duration: number } | null,
-  fallback: number,
-  remaining: number,
-): number {
-  const requested =
-    transition?.style === 'cut'
-      ? 0.08
-      : transition
-        ? Math.min(16, Math.max(1, Number(transition.duration) || 4))
-        : Math.max(0, fallback);
-
-  return Math.min(requested, Math.max(0, remaining));
 }
 
 /** Styles de transition proposés par l'IA (`MixTransition['style']`). */
@@ -104,11 +137,12 @@ const NEUTRAL: TransitionProfile = {
 /**
  * Paramètres audio d'un style de transition. Le fondu croisé à puissance
  * constante reste la base ; ce profil ajoute le traitement propre au style :
- *  - `bass_swap` : le grave du sortant disparaît d'abord, celui de l'entrant
- *    revient après le milieu du fondu (évite le bas du spectre brouillon) ;
+ *  - `bass_swap` (défaut, y compris `blend`) : le grave du sortant disparaît
+ *    d'abord, celui de l'entrant revient après le milieu du fondu (évite le
+ *    bas du spectre brouillon, comme le fait l'AutoMix d'Apple Music) ;
  *  - `filter_sweep` : passe-bas qui se referme sur le sortant ;
  *  - `echo_out` : écho (triolet du tempo) dont la send monte pendant le fondu ;
- *  - `blend`, `cut` et style inconnu : fondu seul (le cut coupe le sortant).
+ *  - `crossfade` / `cut` : fondu seul, sans traitement (le cut coupe le sortant).
  */
 export function transitionProfile(
   style: string | null | undefined,
@@ -119,8 +153,6 @@ export function transitionProfile(
   if (fadeDuration < 0.5) return NEUTRAL;
 
   switch (style) {
-    case 'bass_swap':
-      return { ...NEUTRAL, outBassGain: -18, inBassGain: -18 };
     case 'filter_sweep':
       return { ...NEUTRAL, outLowpassEnd: 400 };
     case 'echo_out':
@@ -129,8 +161,12 @@ export function transitionProfile(
         echoWet: 0.4,
         echoDelay: outBpm > 0 ? beatInterval(outBpm) * 0.75 : 0.3,
       };
-    default:
+    case 'crossfade':
+    case 'cut':
       return NEUTRAL;
+    default:
+      // AutoMix : échange de basses systématique.
+      return { ...NEUTRAL, outBassGain: -18, inBassGain: -18 };
   }
 }
 

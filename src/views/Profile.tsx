@@ -16,8 +16,7 @@ import { api } from '../api/musicApi';
 import { useConfirm } from '../components/common/ConfirmDialog';
 import { ErrorState } from '../components/common/ErrorState';
 import { useToast } from '../components/common/Toast';
-import { AutoMixToggle } from '../components/AutoMix/AutoMixToggle';
-import { CrossfadeSettings } from '../components/AutoMix/CrossfadeSettings';
+import { TransitionSettings } from '../components/AutoMix/TransitionSettings';
 import { Cover } from '../components/common/Cover';
 import { MediaCard } from '../components/common/MediaCard';
 import { TrackList } from '../components/common/TrackList';
@@ -357,10 +356,7 @@ function SettingsTab() {
   return (
     <div className="max-w-2xl space-y-4">
       <section className="overflow-hidden rounded-panel border border-line bg-card">
-        <div className="border-b border-line px-4 py-4">
-          <AutoMixToggle />
-        </div>
-        <CrossfadeSettings />
+        <TransitionSettings />
         <div className="border-t border-line">
           <AccentSettings />
         </div>

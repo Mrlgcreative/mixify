@@ -1,13 +1,19 @@
 import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
 import processorUrl from '@soundtouchjs/audio-worklet/processor?url';
 import { guess } from 'web-audio-beat-detector';
-import type { Track, MixTransition } from '../types/music';
+import type { Track, MixTransition, TransitionMode } from '../types/music';
 import {
+  ALBUM_GAP_SECONDS,
+  AUTOMIX_MAX_SECONDS,
+  AUTOMIX_SHORT_SECONDS,
   MAX_CROSSFADE_SECONDS,
   MIN_CROSSFADE_SECONDS,
+  autoMixDuration,
   equalPowerCurves,
+  matchOctave,
+  normalizeBpm,
   planBeatSync,
-  resolveFadeDuration,
+  tempoCompatible,
   transitionProfile,
 } from './crossfade';
 import { detectKey, harmonicFadeCap, type KeyEstimate } from './harmony';
@@ -19,16 +25,22 @@ import { estimateTempo, type TempoEstimate } from './tempo';
  * Deux `<audio>` alimentent chacun un GainNode -> AnalyserNode -> master.
  * L'Auto-Mix consiste à :
  *   1. préparer le titre suivant dans le deck idle (chargement anticipé) ;
- *   2. démarrer le fondu exactement `crossfade` secondes avant la fin du titre
- *      courant, en pilotant les deux gains avec des courbes à puissance
- *      constante (aucun trou de silence, aucune "creux" de volume) ;
- *   3. aligner les tempos : le titre sortant prend celui du suivant (±8 %)
- *      et une pulsation entrante tombe sur sa grille (beat-sync). Les BPM
- *      viennent d'une analyse du signal (`web-audio-beat-detector`, repli sur
- *      src/audio/tempo.ts), la tonalité de `harmony.ts` ; un écart harmonique
- *      raccourcit le fondu pour éviter que ça « sonne faux ». Le tempo est
- *      étiré par SoundTouch (média rééchantillonné, hauteur inchangée) ; sans
- *      worklet disponible, lecture native et fondu simple.
+ *   2. démarrer le fondu quelques mesures avant la fin du titre courant : la
+ *      durée est musicale (≈ 4 mesures, 4–12 s) et non réglée par l'utilisateur,
+ *      en pilotant les deux gains avec des courbes à puissance constante
+ *      (aucun trou de silence, aucun "creux" de volume) ;
+ *   3. aligner les tempos : le titre sortant prend celui du suivant (±8 %,
+ *      octave corrigée) et une pulsation entrante tombe sur sa grille
+ *      (beat-sync). Les BPM viennent d'une analyse du signal
+ *      (`web-audio-beat-detector`, repli sur src/audio/tempo.ts), la tonalité
+ *      de `harmony.ts` ; un écart harmonique raccourcit le fondu pour éviter
+ *      que ça « sonne faux ». Le tempo est étiré par SoundTouch (média
+ *      rééchantillonné, hauteur inchangée) ; sans worklet disponible, lecture
+ *      native et fondu simple.
+ *
+ * Comme Apple Music : deux titres d'un même album s'enchaînent sans mix
+ * dynamique, un tempo incompatible donne un fondu court sans beat-match, et le
+ * mode `crossfade` est un simple fondu de durée fixe, sans traitement.
  *
  * shortcut: les flux doivent être servis avec des en-têtes CORS
  * (`Access-Control-Allow-Origin`), sinon la Web Audio API produit du silence
@@ -69,6 +81,10 @@ export interface EngineEvents {
   onEnded?: () => void;
   /** Le fondu s'est terminé : le deck entrant devient le deck actif. */
   onSwapped?: () => void;
+  /** Un fondu vient de commencer (indicateur « Mixage »). */
+  onMixStart?: () => void;
+  /** Le fondu est terminé ou annulé. */
+  onMixEnd?: () => void;
   onError?: (message: string) => void;
 }
 
@@ -81,8 +97,9 @@ export class AudioEngine {
 
   private volume = 0.8;
   private muted = false;
-  private autoMix = false;
+  private mode: TransitionMode = 'off';
   private crossfadeSeconds = 8;
+  private mixing = false;
 
   private nextTrack: Track | null = null;
   private nextUrl = '';
@@ -288,13 +305,13 @@ export class AudioEngine {
 
   // ------------------------------------------------------------------ automix
 
-  setAutoMix(enabled: boolean, crossfadeSeconds: number): void {
-    this.autoMix = enabled;
+  setTransition(mode: TransitionMode, crossfadeSeconds: number): void {
+    this.mode = mode;
     this.crossfadeSeconds = Math.max(
       MIN_CROSSFADE_SECONDS,
       Math.min(MAX_CROSSFADE_SECONDS, crossfadeSeconds),
     );
-    if (!enabled || this.crossfadeSeconds === 0) {
+    if (mode !== 'automix') {
       this.disarm();
       return;
     }
@@ -330,6 +347,13 @@ export class AudioEngine {
     }
   }
 
+  /** Bascule l'indicateur « Mixage » et prévient le store au changement. */
+  private setMixing(value: boolean): void {
+    if (this.mixing === value) return;
+    this.mixing = value;
+    (value ? this.events.onMixStart : this.events.onMixEnd)?.();
+  }
+
     /** Annule le fondu en cours (seek, changement de mode, changement de piste). */
     private disarm(keepTransition = false): void {
       if (!this.ctx) return;
@@ -347,6 +371,7 @@ export class AudioEngine {
       this.resetFx(idle, now);
       this.armed = false;
       this.fadePlan = null;
+      this.setMixing(false);
       if (!keepTransition) this.nextTransition = null;
     }
 
@@ -369,22 +394,24 @@ export class AudioEngine {
       this.events.onTime?.(position, duration);
     }
 
+    // Début du fondu : on signale l'état « Mixage ».
+    if (this.fadePlan && !this.mixing && this.ctx.currentTime >= this.fadePlan.startAt) {
+      this.setMixing(true);
+    }
+
     // Fin du fondu : on bascule sur le deck entrant.
     if (this.armed && this.fadePlan && this.ctx.currentTime >= this.fadePlan.endAt) {
       this.swapDecks();
       return;
     }
 
-    // Fenêtre de fondu : on prépare la transition.
-    if (
-      this.autoMix &&
-      this.crossfadeSeconds > 0 &&
-      this.nextTrack &&
-      !this.armed &&
-      duration > 0
-    ) {
+    // Fenêtre de fondu : on prépare la transition. En AutoMix la durée est
+    // musicale (jusqu'à 12 s), donc on arme plus tôt que pour un crossfade.
+    if (this.mode !== 'off' && this.nextTrack && !this.armed && duration > 0) {
       const remaining = (duration - position) / deck.rate;
-      if (remaining <= this.crossfadeSeconds + ARM_LEAD_SECONDS) {
+      const window =
+        (this.mode === 'crossfade' ? this.crossfadeSeconds : AUTOMIX_MAX_SECONDS) + ARM_LEAD_SECONDS;
+      if (remaining <= window) {
         void this.armCrossfade(position, duration);
       }
     }
@@ -436,57 +463,51 @@ export class AudioEngine {
     // doublés (un morceau à 128 BPM annoncé à 256).
     const outBeat = this.beats.get(outgoing.url) ?? null;
     const inBeat = this.beats.get(this.nextUrl) ?? null;
-    const outBpm = outBeat?.bpm ?? outgoing.track?.bpm ?? 0;
-    const inBpm = inBeat?.bpm ?? this.nextTrack.bpm ?? 0;
+    const outBpm = outBeat?.bpm ?? normalizeBpm(outgoing.track?.bpm);
+    const inBpm = matchOctave(outBpm, inBeat?.bpm ?? normalizeBpm(this.nextTrack.bpm));
+    const knownTempo = outBpm > 0 && inBpm > 0;
+    const compatible = tempoCompatible(outBpm, inBpm);
     const sameAlbum =
       !!outgoing.track?.album?.id &&
       !!this.nextTrack.album?.id &&
       outgoing.track.album.id === this.nextTrack.album.id;
-    const sameArtist =
-      !!outgoing.track?.artist?.id &&
-      !!this.nextTrack.artist?.id &&
-      outgoing.track.artist.id === this.nextTrack.artist.id;
+    const style = this.nextTransition?.style ?? null;
 
     // AutoMix à la manière d'Apple Music :
-    //  - album continu -> transitions très discrètes (ou quasi sans fondu)
-    //  - écart de BPM important -> éviter un long fondu, privilégier un enchaînement plus sec
-    let transition = this.nextTransition;
-    if (!transition && sameAlbum) {
-      transition = { style: 'blend', duration: 0.8, tempoSync: true, reason: null };
-    } else if (!transition && sameArtist && Math.abs(outBpm - inBpm) > 14) {
-      transition = { style: 'cut', duration: 0.08, tempoSync: false, reason: null };
-    } else if (!transition && outgoing.track?.genre && this.nextTrack.genre && outgoing.track.genre === this.nextTrack.genre && !sameAlbum) {
-      // Certains genres se succèdent mieux avec des transitions très discrètes
-      transition = { style: 'blend', duration: 1.2, tempoSync: true, reason: null };
-    }
+    //  - même album en lecture séquentielle -> enchaînement quasi direct ;
+    //  - tempos compatibles -> fondu de 4 mesures avec beat-match ;
+    //  - tempos incompatibles -> fondu court, sans beat-match ;
+    //  - Crossfade -> simple fondu de durée fixe, sans traitement.
+    // Le style de l'IA reste un "assaisonnement" (écho, filtre), jamais un cut.
+    let profile = 'crossfade';
+    let beatSync = false;
+    let fadeDuration: number;
 
-    if (!this.nextTransition && transition) {
-      this.nextTransition = transition;
-    }
-
-    let fadeDuration = resolveFadeDuration(transition, this.crossfadeSeconds, remaining);
-    if (sameAlbum && !this.nextTransition) {
-      fadeDuration = Math.min(0.9, fadeDuration);
-    } else if (sameAlbum && this.nextTransition?.style !== 'cut') {
-      fadeDuration = Math.min(fadeDuration, 1.0);
-    }
-    if (!sameAlbum && outBpm && inBpm) {
-      const diff = Math.abs(outBpm - inBpm);
-      if (diff > 16 && transition?.tempoSync === false) {
-        fadeDuration = Math.min(fadeDuration, 0.6);
-      } else if (diff > 12 && fadeDuration > 4) {
-        fadeDuration = Math.min(fadeDuration, 4);
-      } else if (diff > 10 && fadeDuration > 3) {
-        fadeDuration = Math.min(fadeDuration, 3);
+    if (this.mode === 'crossfade') {
+      fadeDuration = this.crossfadeSeconds;
+    } else if (sameAlbum) {
+      fadeDuration = ALBUM_GAP_SECONDS;
+    } else {
+      profile = style && style !== 'cut' ? style : 'blend';
+      if (knownTempo && !compatible) {
+        fadeDuration = AUTOMIX_SHORT_SECONDS;
+      } else {
+        fadeDuration = autoMixDuration(outBpm);
+        beatSync =
+          knownTempo && compatible && style !== 'cut' && this.nextTransition?.tempoSync !== false;
       }
     }
+
+    fadeDuration = Math.min(fadeDuration, remaining);
 
     // Harmonie : deux tonalités éloignées superposées longtemps sonnent faux.
     // On raccourcit alors le croisement au lieu de le supprimer (le fondu
     // reste enchaîné, les deux morceaux ne se chevauchent presque plus).
-    const outKey = this.keys.get(outgoing.url) ?? null;
-    const inKey = this.keys.get(this.nextUrl) ?? null;
-    fadeDuration = harmonicFadeCap(fadeDuration, outKey, inKey);
+    if (this.mode === 'automix' && !sameAlbum) {
+      const outKey = this.keys.get(outgoing.url) ?? null;
+      const inKey = this.keys.get(this.nextUrl) ?? null;
+      fadeDuration = harmonicFadeCap(fadeDuration, outKey, inKey);
+    }
 
     if (fadeDuration <= 0.05) {
       this.armed = false;
@@ -496,14 +517,12 @@ export class AudioEngine {
 
     // Les estimations de tempo sont lues sans await : si l'analyse n'est pas
     // terminée à l'armement, le plan dégrade proprement (fondu sans beat-sync).
-    const forceCut = transition?.style === 'cut';
-    const skipTempoSync = forceCut || transition?.tempoSync === false;
     const plan = planBeatSync({
       position,
       duration,
       crossfade: fadeDuration,
-      outBpm: skipTempoSync ? 0 : outBpm,
-      inBpm: skipTempoSync ? 0 : inBpm,
+      outBpm: beatSync ? outBpm : 0,
+      inBpm: beatSync ? inBpm : 0,
       outPhase: outBeat?.phase ?? 0,
       inPhase: inBeat?.phase ?? 0,
       outRate: outgoing.rate,
@@ -521,6 +540,9 @@ export class AudioEngine {
         return;
       }
     }
+    // Un seek, un changement de mode ou de piste a pu annuler le fondu pendant
+    // le chargement : on ne planifie rien dans ce cas.
+    if (!this.armed) return;
 
     const fadeStartAbs = ctx.currentTime + plan.fadeStart;
     const fadeEndAbs = fadeStartAbs + fadeDuration;
@@ -532,7 +554,7 @@ export class AudioEngine {
     window.setTimeout(() => {
       if (!this.armed) return;
       this.setRate(outgoing, plan.outgoingRate);
-      void this.startIncoming(incoming, plan.inOffset, fadeStartAbs, fadeDuration);
+      void this.startIncoming(incoming, plan.inOffset, fadeStartAbs, fadeDuration, profile);
     }, delayMs);
   }
 
@@ -541,6 +563,7 @@ export class AudioEngine {
     offset: number,
     fadeStartAbs: number,
     fadeDuration: number,
+    profileStyle: string,
   ): Promise<void> {
     const ctx = this.ctx;
     if (!ctx) return;
@@ -580,8 +603,8 @@ export class AudioEngine {
 
     // Traitement propre au style de transition (bass swap, filtre, écho).
     const profile = transitionProfile(
-      this.nextTransition?.style,
-      outgoing.track?.bpm ?? 0,
+      profileStyle,
+      this.beats.get(outgoing.url)?.bpm ?? outgoing.track?.bpm ?? 0,
       duration,
     );
     const fadeEndAbs = fadeStartAbs + duration;
@@ -606,13 +629,6 @@ export class AudioEngine {
       outgoing.feedback.gain.setValueAtTime(0.38, fadeStartAbs);
       outgoing.wet.gain.setValueAtTime(0, fadeStartAbs);
       outgoing.wet.gain.linearRampToValueAtTime(profile.echoWet, fadeEndAbs);
-    }
-
-    // Transition IA : pour un cut, on force la coupure immédiate du sortant
-    // (pas de fondu progressif). Pour les autres styles, on garde le fondu croisé.
-    if (this.nextTransition?.style === 'cut') {
-      outgoing.gain.gain.cancelScheduledValues(fadeStartAbs);
-      outgoing.gain.gain.setValueAtTime(0, fadeStartAbs);
     }
   }
 
@@ -668,6 +684,7 @@ export class AudioEngine {
     this.nextLoaded = false;
     this.nextTransition = null;
     this.anchorClock();
+    this.setMixing(false);
     this.events.onSwapped?.();
   }
 
@@ -760,9 +777,7 @@ async function libraryTempo(buffer: AudioBuffer): Promise<TempoEstimate | null> 
   try {
     const { bpm, offset } = await guess(buffer);
     if (!Number.isFinite(bpm) || bpm <= 0) return null;
-    let value = bpm;
-    while (value < 70) value *= 2;
-    while (value > 180) value /= 2;
+    const value = normalizeBpm(bpm);
     return { bpm: value, phase: offset % (60 / value), confidence: 1 };
   } catch {
     return null;

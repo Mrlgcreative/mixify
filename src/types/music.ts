@@ -206,6 +206,9 @@ export interface ProfileFollows {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
+/** Mode de transition entre titres, calqué sur les réglages d'Apple Music. */
+export type TransitionMode = 'off' | 'automix' | 'crossfade';
+
 /** Vue de l'application (pas de router : navigation locale pilotée par l'état). */
 export type ViewName = 'home' | 'search' | 'charts' | 'library' | 'artist' | 'profile' | 'admin';
 /** État du lecteur — miroir du store Zustand. */
@@ -221,6 +224,9 @@ export interface PlayerState {
   position: number;
   /** Durée du titre courant en secondes. */
   duration: number;
-  autoMix: boolean;
+  transitionStyle: TransitionMode;
+  /** Durée fixe du fondu enchaîné (utilisée seulement en mode `crossfade`). */
   crossfadeSeconds: number;
+  /** Un fondu AutoMix/Crossfade est en cours (indicateur « Mixage »). */
+  mixing: boolean;
 }

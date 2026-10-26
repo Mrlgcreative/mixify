@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ListMusic, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 
 import { Cover } from '../common/Cover';
-import { AutoMixToggle } from '../AutoMix/AutoMixToggle';
+import { AutoMixToggle, MixingBadge } from '../AutoMix/AutoMixToggle';
 import { ProgressBar } from './ProgressBar';
 import { Spectrum } from './Spectrum';
 import { NowPlaying } from './NowPlaying';
@@ -26,6 +26,7 @@ export function Player({ onOpenArtist }: PlayerProps) {
   const repeat = usePlayer((s) => s.repeat);
   const queueOpen = usePlayer((s) => s.queueOpen);
   const notice = usePlayer((s) => s.notice);
+  const mixing = usePlayer((s) => s.mixing);
 
   const toggle = usePlayer((s) => s.toggle);
   const next = usePlayer((s) => s.next);
@@ -66,6 +67,7 @@ export function Player({ onOpenArtist }: PlayerProps) {
               {currentTrack?.title ?? 'Aucun titre'}
             </p>
             <p className="truncate text-xs text-muted">{currentTrack?.artist.name ?? 'Mixify'}</p>
+            {mixing && <MixingBadge />}
           </div>
         </button>
 

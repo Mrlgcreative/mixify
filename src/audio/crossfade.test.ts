@@ -7,10 +7,14 @@ import {
   planBeatSync,
   tempoRatio,
   barInterval,
+  autoMixDuration,
+  matchOctave,
+  normalizeBpm,
+  tempoCompatible,
   MIN_CROSSFADE_SECONDS,
   MAX_CROSSFADE_SECONDS,
-  resolveFadeDuration,
   transitionProfile,
+  AUTOMIX_MIN_SECONDS,
 } from './crossfade.ts';
 
 test('equalPowerCurves : puissance constante aux extrémités', () => {
@@ -213,27 +217,53 @@ test('planBeatSync : dégradation propre sans BPM entrant (sortant seul connu)',
 });
 
 test('bornes du réglage crossfade', () => {
-  assert.equal(MIN_CROSSFADE_SECONDS, 0);
+  assert.equal(MIN_CROSSFADE_SECONDS, 1);
   assert.equal(MAX_CROSSFADE_SECONDS, 12);
 });
 
-test('resolveFadeDuration : cut quasi instantané, IA bornée, jamais au-delà du restant', () => {
-  assert.equal(resolveFadeDuration({ style: 'cut', duration: 12 }, 8, 30), 0.08);
-  assert.equal(resolveFadeDuration({ style: 'blend', duration: 99 }, 8, 30), 16);
-  assert.equal(resolveFadeDuration({ style: 'bass_swap', duration: 0.5 }, 8, 30), 1);
-  assert.equal(resolveFadeDuration(null, 7, 30), 7);
-  assert.equal(resolveFadeDuration({ style: 'blend', duration: 10 }, 8, 3), 3);
+test('autoMixDuration : 4 mesures du sortant, borné à 4–12 s', () => {
+  // 120 BPM : une mesure = 2 s, donc 8 s.
+  assert.equal(autoMixDuration(120), 8);
+  // 60 BPM : 4 mesures = 16 s, ramené à 12 s.
+  assert.equal(autoMixDuration(60), 12);
+  // 180 BPM : 4 mesures = 5,33 s.
+  assert.ok(Math.abs(autoMixDuration(180) - 16 / 3) < 1e-6);
+  // 300 BPM : 4 mesures = 3,2 s, remonté à 4 s.
+  assert.equal(autoMixDuration(300), 4);
+  assert.equal(autoMixDuration(0), AUTOMIX_MIN_SECONDS);
 });
 
-test('transitionProfile : chaque style pilote un traitement distinct', () => {
+test('matchOctave : double/moitié de tempo repliés sur la même grille', () => {
+  assert.equal(matchOctave(120, 120), 120);
+  assert.equal(matchOctave(120, 240), 120);
+  assert.equal(matchOctave(120, 60), 120);
+  assert.equal(matchOctave(87, 174), 87);
+  assert.equal(matchOctave(0, 128), 128);
+  assert.equal(matchOctave(120, 0), 0);
+});
+
+test('normalizeBpm : ramène les BPM de l’API dans 70–180', () => {
+  assert.equal(normalizeBpm(128), 128);
+  assert.equal(normalizeBpm(256), 128);
+  assert.equal(normalizeBpm(45), 90);
+  assert.equal(normalizeBpm(0), 0);
+  assert.equal(normalizeBpm(undefined), 0);
+});
+
+test('tempoCompatible : tolérance de 8 % après correction d’octave', () => {
+  assert.equal(tempoCompatible(120, 124), true);
+  assert.equal(tempoCompatible(120, 240), true, 'octave différente mais même tempo ressenti');
+  assert.equal(tempoCompatible(100, 145), false);
+  assert.equal(tempoCompatible(0, 120), false);
+});
+
+test('transitionProfile : AutoMix échange les basses par défaut', () => {
   const blend = transitionProfile('blend', 120, 8);
-  assert.deepEqual(blend, transitionProfile(null, 120, 8), 'style inconnu = fondu seul');
-  assert.equal(blend.outBassGain, 0);
-  assert.equal(blend.outLowpassEnd, null);
-  assert.equal(blend.echoWet, 0);
+  assert.deepEqual(blend, transitionProfile(null, 120, 8), 'style inconnu = AutoMix');
+  assert.ok(blend.outBassGain < 0 && blend.inBassGain < 0, 'échange de basses par défaut');
 
   const bass = transitionProfile('bass_swap', 120, 8);
-  assert.ok(bass.outBassGain < 0 && bass.inBassGain < 0, 'les deux graves sont atténués');
+  assert.deepEqual(bass, blend);
 
   const sweep = transitionProfile('filter_sweep', 120, 8);
   assert.ok(sweep.outLowpassEnd !== null && sweep.outLowpassEnd < 1000, 'le passe-bas se referme');
@@ -243,7 +273,8 @@ test('transitionProfile : chaque style pilote un traitement distinct', () => {
   assert.ok(Math.abs(echo.echoDelay - 0.375) < 1e-6, 'triolet à 120 BPM');
   assert.equal(transitionProfile('echo_out', 0, 8).echoDelay, 0.3, 'BPM inconnu : retard par défaut');
 
-  // Un fondu trop court ne laisse pas le temps d'entendre un traitement.
+  // Le crossfade et les fondus trop courts restent des fondus simples.
+  assert.equal(transitionProfile('crossfade', 120, 8).outBassGain, 0);
   assert.equal(transitionProfile('bass_swap', 120, 0.3).outBassGain, 0);
   assert.equal(transitionProfile('cut', 120, 8).outBassGain, 0);
 });
