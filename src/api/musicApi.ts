@@ -161,6 +161,8 @@ interface ApiTrack {
   title: string;
   artist_id: string | null;
   artiste: string | null;
+  /** Profil complet de l'artiste quand l'API l'enrichit (badge certifié). */
+  artiste_info?: ApiArtist | null;
   album: string | null;
   cover_url: string | null;
   duration_ms: number | null;
@@ -255,6 +257,7 @@ function toTrack(raw: ApiTrack): Track {
   const artist: Artist = {
     id: raw.artist_id ?? '',
     name: raw.artiste ?? 'Artiste inconnu',
+    verified: raw.artiste_info?.verified === true,
   };
   return {
     id: raw.id,

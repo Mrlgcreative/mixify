@@ -1,5 +1,17 @@
 import { useState, type DragEvent, type ReactNode } from 'react';
-import { Check, Download, GripVertical, Heart, ListPlus, Loader2, MessageCircle, Pause, Play, Trash2 } from 'lucide-react';
+import {
+  BadgeCheck,
+  Check,
+  Download,
+  GripVertical,
+  Heart,
+  ListPlus,
+  Loader2,
+  MessageCircle,
+  Pause,
+  Play,
+  Trash2,
+} from 'lucide-react';
 
 import { Cover } from './Cover';
 import { useConfirm } from './ConfirmDialog';
@@ -167,7 +179,16 @@ export function TrackList({
               <p className={`truncate text-sm font-medium ${isCurrent ? 'text-primary' : 'text-white'}`}>
                 {track.title}
               </p>
-              <p className="truncate text-xs text-muted">{track.artist.name}</p>
+              <p className="flex items-center gap-1 text-xs text-muted">
+                <span className="truncate">{track.artist.name}</span>
+                {track.artist.verified && (
+                  <BadgeCheck
+                    size={13}
+                    className="shrink-0 text-primary"
+                    aria-label="Artiste certifié"
+                  />
+                )}
+              </p>
             </div>
 
             <div className="flex items-center gap-2 text-xs text-muted sm:gap-3">

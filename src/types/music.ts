@@ -12,6 +12,8 @@ export interface Artist {
   followers?: number;
   /** Pays ou ville déclarés (ex. « Kolwezi, RDC »). */
   country?: string;
+  /** Badge certifié (profils vérifiés). */
+  verified?: boolean;
 }
 
 /** Profil artiste complet (espace artiste : édition, bannière, bio…). */
