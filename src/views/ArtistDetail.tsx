@@ -1,5 +1,6 @@
 import { BadgeCheck, ChevronLeft, Play } from 'lucide-react';
 
+import { ErrorState } from '../components/common/ErrorState';
 import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { usePlayer } from '../store/playerStore';
@@ -11,7 +12,7 @@ interface ArtistDetailProps {
 }
 
 export function ArtistDetail({ artistId, onBack }: ArtistDetailProps) {
-  const { data: allTracks, loading, error } = useTracks();
+  const { data: allTracks, loading, error, retry } = useTracks();
   const playTrack = usePlayer((s) => s.playTrack);
 
   if (loading && !allTracks) {
@@ -62,7 +63,7 @@ export function ArtistDetail({ artistId, onBack }: ArtistDetailProps) {
         >
           <ChevronLeft size={16} /> Retour
         </button>
-        <p className="text-sm text-danger">Artiste indisponible : {error}</p>
+        <ErrorState title="Artiste indisponible" error={error} onRetry={retry} />
       </div>
     );
   }
@@ -79,7 +80,7 @@ export function ArtistDetail({ artistId, onBack }: ArtistDetailProps) {
         >
           <ChevronLeft size={16} /> Retour
         </button>
-        <p className="text-sm text-muted">Artiste introuvable.</p>
+        <ErrorState notFound />
       </div>
     );
   }

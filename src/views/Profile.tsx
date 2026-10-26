@@ -14,6 +14,7 @@ import {
 
 import { api } from '../api/musicApi';
 import { useConfirm } from '../components/common/ConfirmDialog';
+import { ErrorState } from '../components/common/ErrorState';
 import { useToast } from '../components/common/Toast';
 import { AutoMixToggle } from '../components/AutoMix/AutoMixToggle';
 import { CrossfadeSettings } from '../components/AutoMix/CrossfadeSettings';
@@ -279,7 +280,15 @@ function PlaylistsTab({
   onNavigate: (view: ViewName) => void;
 }) {
   if (library.loading && !library.data) return <Loading label="Chargement des playlists…" />;
-  if (library.error) return <p className="text-sm text-danger">{library.error}</p>;
+  if (library.error) {
+    return (
+      <ErrorState
+        title="Playlists indisponibles"
+        error={library.error}
+        onRetry={library.retry}
+      />
+    );
+  }
 
   const playlists = library.data?.playlists ?? [];
   return (
@@ -320,7 +329,11 @@ function PlaylistsTab({
 
 function FavoritesTab({ library }: { library: AsyncState<Library> }) {
   if (library.loading && !library.data) return <Loading label="Chargement des favoris…" />;
-  if (library.error) return <p className="text-sm text-danger">{library.error}</p>;
+  if (library.error) {
+    return (
+      <ErrorState title="Favoris indisponibles" error={library.error} onRetry={library.retry} />
+    );
+  }
 
   const liked = library.data?.liked ?? [];
   return (
@@ -461,7 +474,13 @@ function HistoryTab({
           ))}
         </ul>
       )}
-      {history.error && <p className="mt-3 text-sm text-danger">{history.error}</p>}
+      {history.error && (
+        <ErrorState
+          title="Historique indisponible"
+          error={history.error}
+          onRetry={history.retry}
+        />
+      )}
     </section>
   );
 }
@@ -474,7 +493,15 @@ function StatsTab({
   library: AsyncState<Library>;
 }) {
   if (history.loading && !history.data) return <Loading label="Calcul des statistiques…" />;
-  if (history.error) return <p className="text-sm text-danger">{history.error}</p>;
+  if (history.error) {
+    return (
+      <ErrorState
+        title="Statistiques indisponibles"
+        error={history.error}
+        onRetry={history.retry}
+      />
+    );
+  }
 
   const entries = history.data ?? [];
   const stats = computeProfileStats(entries);

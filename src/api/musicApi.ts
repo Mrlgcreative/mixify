@@ -82,7 +82,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   try {
     response = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   } catch {
-    throw new Error('API injoignable — vérifiez que le backend est lancé');
+    throw new Error('Impossible de joindre le serveur. Vérifiez votre connexion.');
   }
 
   const payload = (await response.json().catch(() => null)) as { error?: string } | null;

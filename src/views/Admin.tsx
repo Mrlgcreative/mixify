@@ -22,8 +22,9 @@ import {
   type VerificationRequest,
 } from '../api/adminApi';
 import { useConfirm } from '../components/common/ConfirmDialog';
+import { ErrorState } from '../components/common/ErrorState';
 import { useToast } from '../components/common/Toast';
-import { useAsync } from '../hooks/useMusicApi';
+import { useAsync, type AsyncState } from '../hooks/useMusicApi';
 import { useAuthStore } from '../store/authStore';
 import type { Role } from '../types/auth';
 
@@ -132,10 +133,21 @@ function Stat({ label, value, detail }: { label: string; value: ReactNode; detai
 }
 
 function OverviewTab() {
-  const { data, loading, error } = useResource(() => adminApi.overview(), []);
+  const { data, loading, error, notFound, retry } = useResource(() => adminApi.overview(), []);
 
   if (loading && !data) return <Loading />;
-  if (error) return <ErrorText text={error} />;
+  if (error) {
+    return (
+      <div className="px-4 py-5 md:px-6">
+        <ErrorState
+          title="Vue d'ensemble indisponible"
+          error={error}
+          notFound={notFound}
+          onRetry={retry}
+        />
+      </div>
+    );
+  }
   if (!data) return null;
 
   const days = Array.from({ length: 7 }, (_, index) =>
@@ -285,7 +297,7 @@ function VerificationsTab() {
       {requests.loading && !requests.data ? (
         <Loading />
       ) : requests.error ? (
-        <ErrorText text={requests.error} />
+        <ErrorState error={requests.error} onRetry={requests.retry} />
       ) : (requests.data ?? []).length === 0 ? (
         <Empty text="Aucune demande dans cette catégorie." />
       ) : (
@@ -902,9 +914,17 @@ function Pager<T>({
   );
 }
 
-function ListState<T>({ state }: { state: { data: Page<T> | null; loading: boolean; error: string | null } }) {
+function ListState<T>({ state }: { state: AsyncState<Page<T>> }) {
   if (state.loading && !state.data) return <Loading />;
-  if (state.error) return <ErrorText text={state.error} />;
+  if (state.error) {
+    return (
+      <ErrorState
+        error={state.error}
+        notFound={state.notFound}
+        onRetry={state.retry}
+      />
+    );
+  }
   if (state.data && state.data.items.length === 0) return <Empty text="Aucun résultat." />;
   return null;
 }
@@ -915,11 +935,6 @@ function Loading() {
       <Loader2 size={16} className="animate-spin" /> Chargement…
     </div>
   );
-}
-
-function ErrorText({ text }: { text: string | null }) {
-  if (!text) return null;
-  return <p className="px-1 py-3 text-sm text-danger">{text}</p>;
 }
 
 function Empty({ text }: { text: string }) {

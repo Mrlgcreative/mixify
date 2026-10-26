@@ -2,6 +2,7 @@ import { Play } from 'lucide-react';
 
 import { Carousel } from '../components/common/Carousel';
 import { Cover } from '../components/common/Cover';
+import { ErrorState } from '../components/common/ErrorState';
 import { MediaCard } from '../components/common/MediaCard';
 import { SkeletonCard } from '../components/common/Skeleton';
 import { useHistory, useHomeFeed } from '../hooks/useMusicApi';
@@ -113,7 +114,7 @@ interface HomeProps {
 }
 
 export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
-  const { data, loading, error } = useHomeFeed();
+  const { data, loading, error, retry } = useHomeFeed();
   const user = useAuthStore((s) => s.user);
   const history = useHistory(user ? 0 : -1);
   const greeting = data?.greeting ?? '';
@@ -149,7 +150,11 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
   }
 
   if (error || !data) {
-    return <p className="p-6 text-sm text-danger">Impossible de charger l'accueil : {error}</p>;
+    return (
+      <div className="p-6">
+        <ErrorState title="Accueil indisponible" error={error} onRetry={retry} />
+      </div>
+    );
   }
 
   const localShelf = data.shelves.find((shelf) => shelf.id === 'kolwezi');

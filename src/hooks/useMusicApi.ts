@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api } from '../api/musicApi';
+import { api, ApiError } from '../api/musicApi';
 import type { ChartPeriod } from '../api/musicApi';
 import { useLibraryStore } from '../store/libraryStore';
 import type {
@@ -18,26 +18,37 @@ export interface AsyncState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  /** Le backend a répondu 404 : le contenu n'existe pas. */
+  notFound: boolean;
+  /** Relance la requête (bouton « Réessayer »). */
+  retry: () => void;
 }
+
+type AsyncData<T> = Omit<AsyncState<T>, 'retry'>;
 
 /**
  * Hook générique d'accès à l'API : gère le chargement, l'erreur et
  * l'annulation des réponses obsolètes (frappe rapide dans la recherche).
  */
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): AsyncState<T> {
-  const [state, setState] = useState<AsyncState<T>>({
+  const [state, setState] = useState<AsyncData<T>>({
     data: null,
     loading: true,
     error: null,
+    notFound: false,
   });
+  const [revision, setRevision] = useState(0);
   const requestId = useRef(0);
+  const retry = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
     const id = ++requestId.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null, notFound: false }));
     fn()
       .then((data) => {
-        if (id === requestId.current) setState({ data, loading: false, error: null });
+        if (id === requestId.current) {
+          setState({ data, loading: false, error: null, notFound: false });
+        }
       })
       .catch((error: unknown) => {
         if (id === requestId.current) {
@@ -45,13 +56,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): AsyncState<T
             data: null,
             loading: false,
             error: error instanceof Error ? error.message : 'Erreur inconnue',
+            notFound: error instanceof ApiError && error.status === 404,
           });
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- les dépendances sont fournies par l'appelant
-  }, deps);
+  }, [...deps, revision]);
 
-  return state;
+  return { ...state, retry };
 }
 
 /** Contenu de la page d'accueil. */

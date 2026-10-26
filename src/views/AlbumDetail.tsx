@@ -1,5 +1,6 @@
 import { ChevronLeft, Play } from 'lucide-react';
 
+import { ErrorState } from '../components/common/ErrorState';
 import { Skeleton, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { usePlayer } from '../store/playerStore';
@@ -11,7 +12,7 @@ interface AlbumDetailProps {
 }
 
 export function AlbumDetail({ albumId, onBack }: AlbumDetailProps) {
-  const { data: allTracks, loading, error } = useTracks();
+  const { data: allTracks, loading, error, retry } = useTracks();
   const playTrack = usePlayer((s) => s.playTrack);
 
   if (loading && !allTracks) {
@@ -51,7 +52,7 @@ export function AlbumDetail({ albumId, onBack }: AlbumDetailProps) {
         >
           <ChevronLeft size={16} /> Retour
         </button>
-        <p className="text-sm text-danger">Album indisponible : {error}</p>
+        <ErrorState title="Album indisponible" error={error} onRetry={retry} />
       </div>
     );
   }
@@ -68,7 +69,7 @@ export function AlbumDetail({ albumId, onBack }: AlbumDetailProps) {
         >
           <ChevronLeft size={16} /> Retour
         </button>
-        <p className="text-sm text-muted">Album introuvable.</p>
+        <ErrorState notFound />
       </div>
     );
   }

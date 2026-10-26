@@ -3,6 +3,7 @@ import { ChevronLeft, Heart, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-
 
 import { api } from '../api/musicApi';
 import { listDownloads, onDownloadsChange } from '../audio/offline';
+import { ErrorState } from '../components/common/ErrorState';
 import { MediaCard } from '../components/common/MediaCard';
 import { useConfirm } from '../components/common/ConfirmDialog';
 import { Skeleton, SkeletonCard } from '../components/common/Skeleton';
@@ -62,7 +63,7 @@ function OfflineSection() {
 }
 
 function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
-  const { data, loading, error } = useLibrary();
+  const { data, loading, error, retry } = useLibrary();
   const playTrack = usePlayer((s) => s.playTrack);
   const playlistsChanged = useLibraryStore((s) => s.playlistsChanged);
 
@@ -120,7 +121,7 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
     return (
       <div className="px-4 py-6 md:px-6">
         <OfflineSection />
-        <p className="text-sm text-danger">Bibliothèque indisponible : {error}</p>
+        <ErrorState title="Bibliothèque indisponible" error={error} onRetry={retry} />
       </div>
     );
   }
@@ -222,7 +223,7 @@ function LibraryMain({ onSelect }: { onSelect: (id: string) => void }) {
 }
 
 export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void }) {
-  const { data: playlist, loading, error } = usePlaylist(id);
+  const { data: playlist, loading, error, notFound, retry } = usePlaylist(id);
   const { data: catalog } = useTracks();
   const playTrack = usePlayer((s) => s.playTrack);
   const playlistsChanged = useLibraryStore((s) => s.playlistsChanged);
@@ -266,7 +267,12 @@ export function PlaylistDetail({ id, onBack }: { id: string; onBack: () => void 
         >
           <ChevronLeft size={16} /> Retour à la bibliothèque
         </button>
-        <p className="text-sm text-danger">Playlist indisponible : {error}</p>
+        <ErrorState
+          title="Playlist indisponible"
+          error={error}
+          notFound={notFound || !error}
+          onRetry={retry}
+        />
       </div>
     );
   }

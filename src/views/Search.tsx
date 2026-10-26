@@ -1,6 +1,7 @@
 import { Music, Search as SearchIcon, User, Disc } from 'lucide-react';
 
 import { MediaCard } from '../components/common/MediaCard';
+import { ErrorState } from '../components/common/ErrorState';
 import { TrackList } from '../components/common/TrackList';
 import { FollowButton } from '../components/Follow/FollowButton';
 import { Skeleton, SkeletonCard, SkeletonTrackRow } from '../components/common/Skeleton';
@@ -24,7 +25,7 @@ const GENRES = [
 ];
 
 export function SearchView({ query, onSearch }: SearchViewProps) {
-  const { data, loading, error } = useSearch(query);
+  const { data, loading, error, retry } = useSearch(query);
   const playTrack = usePlayer((s) => s.playTrack);
 
   if (!query.trim()) {
@@ -99,8 +100,7 @@ export function SearchView({ query, onSearch }: SearchViewProps) {
   if (error) {
     return (
       <div className="px-4 py-6 md:px-6">
-        <h1 className="mb-1 text-xl font-bold text-white">Recherche indisponible</h1>
-        <p className="text-sm text-danger">{error}</p>
+        <ErrorState title="Recherche indisponible" error={error} onRetry={retry} />
       </div>
     );
   }

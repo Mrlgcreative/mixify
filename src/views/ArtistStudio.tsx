@@ -18,6 +18,7 @@ import { ImageUpload } from '../components/common/ImageUpload';
 import { api } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
 import { useConfirm } from '../components/common/ConfirmDialog';
+import { ErrorState } from '../components/common/ErrorState';
 import { Skeleton, SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useToast } from '../components/common/Toast';
@@ -138,14 +139,7 @@ export function ArtistStudio() {
   if (error) {
     return (
       <div className="p-6">
-        <p className="text-sm text-danger">Impossible de charger l'espace artiste : {error}</p>
-        <button
-          type="button"
-          onClick={refresh}
-          className="mt-3 rounded-full border border-line px-4 py-2 text-sm font-semibold text-white hover:border-muted"
-        >
-          Réessayer
-        </button>
+        <ErrorState title="Espace artiste indisponible" error={error} onRetry={refresh} />
       </div>
     );
   }

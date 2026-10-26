@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Play, TrendingUp } from 'lucide-react';
 
 import type { ChartPeriod } from '../api/musicApi';
+import { ErrorState } from '../components/common/ErrorState';
 import { SkeletonTrackRow } from '../components/common/Skeleton';
 import { TrackList } from '../components/common/TrackList';
 import { useChart } from '../hooks/useMusicApi';
@@ -16,7 +17,7 @@ const PERIODS: Array<{ value: ChartPeriod; label: string }> = [
 /** Classement des titres les plus écoutés : semaine, mois ou année. */
 export function ChartsView() {
   const [period, setPeriod] = useState<ChartPeriod>('week');
-  const { data: tracks, loading, error } = useChart(period);
+  const { data: tracks, loading, error, notFound, retry } = useChart(period);
   const playTrack = usePlayer((s) => s.playTrack);
 
   return (
@@ -68,9 +69,12 @@ export function ChartsView() {
       )}
 
       {!loading && error && (
-        <p className="rounded-card bg-card px-4 py-6 text-sm text-danger">
-          Classement indisponible : {error}
-        </p>
+        <ErrorState
+          title="Classement indisponible"
+          error={error}
+          notFound={notFound}
+          onRetry={retry}
+        />
       )}
 
       {!loading && !error && tracks && tracks.length === 0 && (
