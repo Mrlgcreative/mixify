@@ -15,10 +15,11 @@ export function MobileNav({ view, onNavigate, compact = false }: MobileNavProps)
   const user = useAuthStore((s) => s.user);
   const canPublish =
     user?.role === 'artiste' || user?.role === 'developper' || user?.role === 'admin';
+  // Accueil au centre de la barre (demande produit), Bibliothèque à droite.
   const items: Array<{ view: ViewName; label: string; icon: typeof Home }> = [
-    { view: 'home', label: 'Accueil', icon: Home },
     { view: 'search', label: 'Rechercher', icon: Search },
     { view: 'charts', label: 'Classement', icon: BarChart3 },
+    { view: 'home', label: 'Accueil', icon: Home },
     { view: 'library', label: 'Bibliothèque', icon: Library },
     ...(canPublish
       ? [{ view: 'artist' as const, label: 'Artiste', icon: Mic2 }]
@@ -30,7 +31,7 @@ export function MobileNav({ view, onNavigate, compact = false }: MobileNavProps)
 
   // Barre réduite : seuls Accueil et Bibliothèque restent, le lecteur occupe
   // le centre (voir Player).
-  const compactItems = [items[0], items[3]];
+  const compactItems = items.filter((item) => item.view === 'home' || item.view === 'library');
 
   return (
     <>
