@@ -33,6 +33,32 @@ règle CORS du bucket R2 dépendent de cette origine exacte.
 `VITE_API_BASE_URL` est lue **au build** : sur Vercel, renseignez-la avec le
 domaine de l'API avant de déployer.
 
+## Application mobile (Android)
+
+Capacitor 8 empaquette le build Vite dans une WebView Android
+(`com.imasomo.mixify`). iOS n'est pas configuré (build macOS/Xcode requis).
+
+Prérequis : JDK 21, Android SDK (platform 36) et `ANDROID_HOME`.
+
+```bash
+# L'API doit être en HTTPS : la WebView refuse le HTTP en clair.
+VITE_API_BASE_URL=https://api.example.com npm run mobile:sync
+
+# APK de debug
+JAVA_HOME=~/.jdks/jdk-21.0.12.1+1 ANDROID_HOME=~/Android/Sdk npm run mobile:apk
+# → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+`mobile:sync` reconstruit le front et copie `dist/` dans le projet natif ;
+`mobile:apk` fait de même puis lance Gradle. Après un changement de code, il
+faut donc resynchroniser avant de reconstruire l'APK.
+
+L'origine de la WebView Android est `https://localhost` (iOS :
+`capacitor://localhost`). Elle doit figurer dans `ALLOWED_ORIGINS` côté backend
+**et** dans la règle CORS du bucket R2, sinon les appels API et les uploads
+échouent. La connexion Google est refusée par Google dans une WebView
+(`disallowed_useragent`) : elle reste réservée au navigateur.
+
 ## Comptes et session
 
 - Première visite : **onboarding** (3 écrans) puis **connexion** ou **inscription** ;
@@ -100,8 +126,8 @@ Le détail complet (codes, upload, quotas) est documenté par le backend sur
 
 ### CORS
 
-1. Backend : `ALLOWED_ORIGINS` doit contenir `http://localhost:5173` (et le
-   domaine du front en production).
+1. Backend : `ALLOWED_ORIGINS` doit contenir `http://localhost:5173`, le
+   domaine du front en production et `https://localhost` pour l'app Android.
 2. Bucket R2 : autoriser les mêmes origines en `GET`, `HEAD`, `PUT` — sans cela
    la lecture audio (Web Audio exige CORS) et l'upload présigné échouent.
 
