@@ -51,10 +51,24 @@ export function setToken(token: string | null): void {
   }
 }
 
-/** URL de départ de la connexion Google (retour sur le front avec #token=…). */
+/** Nonce à usage unique du retour Google, conservé dans l'onglet qui a lancé la connexion. */
+const OAUTH_NONCE_KEY = 'mixify.oauth_nonce';
+
+/** URL de départ de la connexion Google (retour sur le front avec #token=…&nonce=…). */
 export function googleLoginUrl(role?: Role): string {
-  const query = role === 'artiste' ? '?role=artiste' : '';
-  return `${BASE_URL}/api/auth/google${query}`;
+  const query = new URLSearchParams();
+  if (role === 'artiste') query.set('role', 'artiste');
+  // Un lien #token=… forgé n'a pas ce nonce : il ne peut pas installer de session.
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  try {
+    sessionStorage.setItem(OAUTH_NONCE_KEY, nonce);
+  } catch {
+    /* stockage indisponible : le retour Google sera refusé, pas de session au hasard */
+  }
+  query.set('nonce', nonce);
+  return `${BASE_URL}/api/auth/google?${query.toString()}`;
 }
 
 /** Résultat du retour Google (#token=… / #error=…), puis nettoie l'URL. */
@@ -66,10 +80,21 @@ export function takeAuthCallback(): { token?: string; error?: string } {
     '',
     window.location.pathname + window.location.search,
   );
-  return {
-    token: params.get('token') ?? undefined,
-    error: params.get('error') ?? undefined,
-  };
+  const token = params.get('token') ?? undefined;
+  const error = params.get('error') ?? undefined;
+  if (!token) return { error };
+
+  let expected = '';
+  try {
+    expected = sessionStorage.getItem(OAUTH_NONCE_KEY) ?? '';
+    sessionStorage.removeItem(OAUTH_NONCE_KEY);
+  } catch {
+    expected = '';
+  }
+  if (!expected || params.get('nonce') !== expected) {
+    return { error: 'Lien de connexion invalide, réessayez' };
+  }
+  return { token };
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
