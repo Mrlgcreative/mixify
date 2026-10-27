@@ -34,11 +34,9 @@ export function MobileNav({ view, onNavigate, compact = false }: MobileNavProps)
 
   return (
     <>
-      <div
-        className={`fixed inset-x-2 bottom-[calc(8px+env(safe-area-inset-bottom))] z-40 flex h-[60px] items-center justify-between md:hidden ${
-          compact ? '' : 'pointer-events-none'
-        }`}
-      >
+      {/* Le conteneur ne capture jamais les clics : sans ça, sa zone vide au
+          centre recouvre le lecteur (z-30) et bloque lecture/pause. */}
+      <div className="pointer-events-none fixed inset-x-2 bottom-[calc(8px+env(safe-area-inset-bottom))] z-40 flex h-[60px] items-center justify-between md:hidden">
         {compactItems.map((item) => {
           const Icon = item.icon;
           const active = view === item.view;
