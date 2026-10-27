@@ -45,8 +45,8 @@ body {
    */
   .bg-grid {
     background-image:
-      linear-gradient(rgb(var(--line) / 0.35) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(var(--line) / 0.35) 1px, transparent 1px),
+      linear-gradient(rgb(var(--line) / 0.8) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(var(--line) / 0.8) 1px, transparent 1px),
       radial-gradient(110% 70% at 12% -8%, rgb(var(--primary) / 0.12), transparent 62%),
       radial-gradient(90% 60% at 100% 0%, rgb(56 163 224 / 0.09), transparent 58%);
     background-size:
