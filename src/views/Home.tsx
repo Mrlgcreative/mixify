@@ -1,4 +1,5 @@
-import { Play } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 
 import { Carousel } from '../components/common/Carousel';
 import { Cover } from '../components/common/Cover';
@@ -113,12 +114,57 @@ interface HomeProps {
   onOpenArtist?: (id: string) => void;
 }
 
+/** Rotation du carrousel « À la une » (ms). */
+const HERO_INTERVAL_MS = 7000;
+
+/** Copie mélangée (Fisher-Yates) : l'ordre change à chaque visite. */
+function shuffle<T>(items: readonly T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
   const { data, loading, error, retry } = useHomeFeed();
   const user = useAuthStore((s) => s.user);
   const history = useHistory(user ? 0 : -1);
   const greeting = data?.greeting ?? '';
   const playTrack = usePlayer((s) => s.playTrack);
+
+  // File d'attente et diapositives du carrousel : catalogue dédoublonné, ordre
+  // aléatoire. Le bouton lance le mix depuis le titre affiché.
+  const heroQueue = useMemo(() => {
+    const seen = new Set<string>();
+    return (data?.shelves ?? [])
+      .flatMap((shelf) => shelf.items)
+      .filter(isTrack)
+      .filter((track) => {
+        if (seen.has(track.id)) return false;
+        seen.add(track.id);
+        return true;
+      });
+  }, [data]);
+  const slides = useMemo(() => shuffle(heroQueue), [heroQueue]);
+  const [index, setIndex] = useState(0);
+  const [manualPaused, setManualPaused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const paused = manualPaused || hovered;
+
+  useEffect(() => {
+    if (paused || slides.length < 2) return;
+    const timer = window.setTimeout(
+      () => setIndex((current) => (current + 1) % slides.length),
+      HERO_INTERVAL_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [paused, slides.length, index]);
+
+  const goTo = (next: number) => {
+    if (slides.length > 0) setIndex((next + slides.length) % slides.length);
+  };
 
   if (loading) {
     return (
@@ -158,9 +204,9 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
   }
 
   const localShelf = data.shelves.find((shelf) => shelf.id === 'kolwezi');
-  const heroTracks = data.shelves.flatMap((shelf) => shelf.items.filter(isTrack));
-  const localHero = localShelf?.items.filter(isTrack)[0];
-  const hero = localHero ?? heroTracks[0];
+  const localIds = new Set((localShelf?.items ?? []).filter(isTrack).map((track) => track.id));
+  const activeIndex = slides.length > 0 ? index % slides.length : 0;
+  const hero = slides[activeIndex];
 
   // Raccourcis : les six premiers titres du catalogue publié.
   const catalog = data.shelves.find((shelf) => shelf.id === 'nouveautes')?.items ?? [];
@@ -191,9 +237,23 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
         </section>
       )}
 
-      {/* À la une : grande pochette, l'interface s'efface devant le titre. */}
-      <section className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/20 via-card to-panel p-5 md:p-8">
-        <div className="relative flex flex-wrap items-end gap-6">
+      {/* À la une : carrousel de mixs tirés au hasard, l'interface s'efface devant le titre. */}
+      <section
+        className="relative mt-8 overflow-hidden rounded-panel bg-gradient-to-br from-primary/20 via-card to-panel p-5 md:p-8"
+        role="region"
+        aria-roledescription="carrousel"
+        aria-label="Mix à la une"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocusCapture={() => setHovered(true)}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(false);
+        }}
+      >
+        <div
+          key={hero?.id ?? 'mixify'}
+          className="relative flex animate-hero-in flex-wrap items-end gap-6"
+        >
           <Cover
             seed={hero?.id ?? 'mixify'}
             title={hero?.title ?? 'Mixify'}
@@ -203,7 +263,7 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
           />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              {localHero ? 'Scène de Kolwezi' : 'À la une'}
+              {hero && localIds.has(hero.id) ? 'Scène de Kolwezi' : 'À la une'}
             </p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-white md:text-5xl">
               {hero?.title ?? 'Ton mix du jour est prêt'}
@@ -218,7 +278,7 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
             </p>
             <button
               type="button"
-              onClick={() => hero && void playTrack(hero, heroTracks)}
+              onClick={() => hero && void playTrack(hero, heroQueue)}
               disabled={!hero}
               className="mt-5 flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-contrast transition enabled:hover:scale-[1.02] disabled:opacity-40"
             >
@@ -226,6 +286,53 @@ export function Home({ onOpenAlbum, onOpenArtist }: HomeProps = {}) {
             </button>
           </div>
         </div>
+
+        {slides.length > 1 && (
+          <div className="relative mt-5 flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center">
+              {slides.map((slide, slideIndex) => (
+                <button
+                  key={slide.id}
+                  type="button"
+                  onClick={() => goTo(slideIndex)}
+                  aria-label={`Afficher ${slide.title}`}
+                  aria-current={slideIndex === activeIndex ? 'true' : undefined}
+                  className="group flex h-6 w-4 items-center justify-center"
+                >
+                  <span
+                    className={`h-1.5 rounded-full transition-all ${
+                      slideIndex === activeIndex ? 'w-4 bg-primary' : 'w-1.5 bg-white/30 group-hover:bg-white/60'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => goTo(activeIndex - 1)}
+              aria-label="Mix précédent"
+              className="rounded-full border border-white/10 bg-black/30 p-2 text-subtle transition hover:border-primary/50 hover:text-white"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setManualPaused((value) => !value)}
+              aria-label={manualPaused ? 'Reprendre le carrousel' : 'Mettre le carrousel en pause'}
+              className="rounded-full border border-white/10 bg-black/30 p-2 text-subtle transition hover:border-primary/50 hover:text-white"
+            >
+              {manualPaused ? <Play size={16} fill="currentColor" /> : <Pause size={16} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => goTo(activeIndex + 1)}
+              aria-label="Mix suivant"
+              className="rounded-full border border-white/10 bg-black/30 p-2 text-subtle transition hover:border-primary/50 hover:text-white"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
         <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
       </section>
 
