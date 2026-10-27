@@ -63,7 +63,8 @@ export function DataSaverSettings() {
         <span className="min-w-0">
           <span className="block text-sm font-semibold text-white">Télécharger en Wi-Fi uniquement</span>
           <span className="mt-1 block text-xs text-muted">
-            Évite de consommer les données mobiles ; vous pouvez préparer vos titres au cyber.
+            Désactivé par défaut : les téléchargements passent aussi par les données mobiles.
+            Activez-le pour les réserver au Wi-Fi.
           </span>
         </span>
         <span

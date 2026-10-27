@@ -34,12 +34,15 @@ export function setAudioQuality(quality: AudioQuality): void {
   }
 }
 
-/** Téléchargements réservés au Wi-Fi (utile quand on prépare ses titres au cyber). */
+/**
+ * Téléchargements réservés au Wi-Fi. Désactivé par défaut : on télécharge
+ * aussi en données mobiles, l'utilisateur peut l'activer pour économiser.
+ */
 export function getWifiOnlyDownloads(): boolean {
   try {
-    return localStorage.getItem(WIFI_KEY) !== '0';
+    return localStorage.getItem(WIFI_KEY) === '1';
   } catch {
-    return true;
+    return false;
   }
 }
 
