@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <!-- Icône Mixify (vert) : mêmes trois barres d'égaliseur que le composant Logo. -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="18%" r="78%">
+      <stop offset="0%" stop-color="#34C759" stop-opacity="0.28" />
+      <stop offset="60%" stop-color="#34C759" stop-opacity="0.05" />
+      <stop offset="100%" stop-color="#34C759" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bars" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8EE1A3" />
+      <stop offset="60%" stop-color="#34C759" />
+      <stop offset="100%" stop-color="#2AA248" />
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="#0A0A0B" />
+  <rect width="1080" height="1080" fill="url(#glow)" />
+  <g fill="url(#bars)">
+    <rect x="164" y="344" width="176" height="392" rx="88" opacity="0.7" />
+    <rect x="452" y="232" width="176" height="616" rx="88" />
+    <rect x="740" y="302" width="176" height="476" rx="88" opacity="0.85" />
+  </g>
+</svg>
