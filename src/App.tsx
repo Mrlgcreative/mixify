@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type UIEvent } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { AuthScreen } from './components/Auth/AuthScreen';
@@ -56,6 +56,9 @@ export default function App() {
   });
   const queueOpen = usePlayer((s) => s.queueOpen);
   const hasTrack = usePlayer((s) => Boolean(s.currentTrack));
+  const [compactNav, setCompactNav] = useState(false);
+  const lastScrollTop = useRef(0);
+  const scrollTravel = useRef(0);
   const user = useAuthStore((s) => s.user);
   const authReady = useAuthStore((s) => s.ready);
   const initAuth = useAuthStore((s) => s.init);
@@ -67,6 +70,39 @@ export default function App() {
   useEffect(() => {
     applyTheme({ ...theme, colors: { ...theme.colors, primary: getAccent() } });
   }, []);
+
+  // La barre mobile se replie en défilant vers le bas (comme Apple Music) et
+  // réapparaît au défilement inverse ou en haut de page.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const onChange = () => {
+      if (!query.matches) setCompactNav(false);
+    };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    const top = event.currentTarget.scrollTop;
+    const delta = top - lastScrollTop.current;
+    lastScrollTop.current = top;
+    if (window.innerWidth >= 768 || top <= 24) {
+      scrollTravel.current = 0;
+      setCompactNav(false);
+      return;
+    }
+    scrollTravel.current =
+      delta > 0
+        ? Math.max(0, scrollTravel.current + delta)
+        : Math.min(0, scrollTravel.current + delta);
+    if (scrollTravel.current >= 12) {
+      scrollTravel.current = 0;
+      setCompactNav(true);
+    } else if (scrollTravel.current <= -12) {
+      scrollTravel.current = 0;
+      setCompactNav(false);
+    }
+  };
 
   // Reprend la session enregistrée (token localStorage -> /api/auth/me).
   useEffect(() => {
@@ -120,6 +156,7 @@ export default function App() {
   const view = nav.stack[nav.cursor];
 
   const navigate = (next: ViewName) => {
+    setCompactNav(false);
     if (playlistRoute) window.history.pushState({}, '', '/');
     setPlaylistRoute(null);
     setAlbumRoute(null);
@@ -189,7 +226,7 @@ export default function App() {
         <main
           className={`flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-panel md:bg-grid md:bg-panel md:pb-0 ${
             hasTrack
-              ? 'pb-[calc(72px+64px+env(safe-area-inset-bottom)+16px)]'
+              ? 'pb-[calc(96px+64px+env(safe-area-inset-bottom)+16px)]'
               : 'pb-[calc(64px+env(safe-area-inset-bottom)+12px)]'
           }`}
         >
@@ -201,7 +238,7 @@ export default function App() {
             onOpenProfile={() => navigate('profile')}
           />
 
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto" onScroll={handleScroll}>
             {playlistRoute ? (
               <PlaylistDetail id={playlistRoute} onBack={closePlaylist} />
             ) : albumRoute ? (
@@ -227,8 +264,12 @@ export default function App() {
         {queueOpen && <QueuePanel />}
       </div>
 
-      <Player onOpenArtist={openArtist} />
-      <MobileNav view={playlistRoute ? 'library' : view} onNavigate={navigate} />
+      <Player compact={compactNav} onOpenArtist={openArtist} />
+      <MobileNav
+        view={playlistRoute ? 'library' : view}
+        onNavigate={navigate}
+        compact={compactNav}
+      />
     </div>
   );
 }

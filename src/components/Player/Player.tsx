@@ -12,10 +12,12 @@ import { formatTime } from '../../utils/format';
 interface PlayerProps {
   /** Ouvre la fiche artiste depuis le lecteur plein écran. */
   onOpenArtist: (artistId: string) => void;
+  /** Barre repliée entre Accueil et Bibliothèque (défilement mobile). */
+  compact?: boolean;
 }
 
 /** Barre de lecture fixe en bas de l'application. */
-export function Player({ onOpenArtist }: PlayerProps) {
+export function Player({ onOpenArtist, compact = false }: PlayerProps) {
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
   const position = usePlayer((s) => s.position);
@@ -48,7 +50,11 @@ export function Player({ onOpenArtist }: PlayerProps) {
   return (
     <>
       <footer
-        className="glass fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-2 right-2 z-30 flex h-[72px] shrink-0 items-center gap-2 rounded-[22px] px-3 md:relative md:bottom-auto md:left-auto md:right-auto md:z-auto md:mx-2 md:mb-2 md:h-[88px] md:gap-4 md:rounded-[24px] md:px-4"
+        className={`glass fixed z-30 flex shrink-0 items-center gap-2 md:relative md:bottom-auto md:left-auto md:right-auto md:z-auto md:mx-2 md:mb-2 md:h-[88px] md:gap-4 md:rounded-[24px] md:px-4 motion-safe:transition-[bottom,left,right,height,border-radius] motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none ${
+          compact
+            ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] left-[60px] right-[60px] h-[60px] rounded-full px-2'
+            : 'bottom-[calc(96px+env(safe-area-inset-bottom))] left-2 right-2 h-[72px] rounded-[22px] px-3'
+        }`}
       >
         {/* Pochette + métadonnées */}
         <button
@@ -60,19 +66,19 @@ export function Player({ onOpenArtist }: PlayerProps) {
             seed={currentTrack?.id ?? 'mixify'}
             title={currentTrack?.title ?? 'Mixify'}
             imageUrl={currentTrack?.album?.coverUrl ?? currentTrack?.coverUrl}
-            className="h-12 w-12 shrink-0 md:h-14 md:w-14"
+            className={`shrink-0 md:h-14 md:w-14 ${compact ? 'h-10 w-10' : 'h-12 w-12'}`}
           />
           <div className="min-w-0" style={{ textShadow: '0 1px 4px rgb(0 0 0 / 0.6)' }}>
-            <p className="truncate text-[13px] font-semibold text-white md:text-sm">
+            <p className={`truncate font-semibold text-white md:text-sm ${compact ? 'text-xs' : 'text-[13px]'}`}>
               {currentTrack?.title ?? 'Aucun titre'}
             </p>
-            <p className="truncate text-xs text-muted">{currentTrack?.artist.name ?? 'Mixify'}</p>
-            {mixing && <MixingBadge />}
+            <p className={`truncate text-xs text-muted ${compact ? 'hidden' : ''}`}>{currentTrack?.artist.name ?? 'Mixify'}</p>
+            {mixing && !compact && <MixingBadge />}
           </div>
         </button>
 
       {/* Transport + progression */}
-      <div className="flex flex-[2] flex-col items-center gap-1">
+      <div className={`flex flex-col items-center gap-1 ${compact ? 'shrink-0' : 'flex-[2]'}`}>
         <div className="flex items-center gap-3 sm:gap-4">
           <button
             type="button"
@@ -87,7 +93,7 @@ export function Player({ onOpenArtist }: PlayerProps) {
             type="button"
             onClick={() => void previous()}
             aria-label="Titre précédent"
-            className="text-muted transition hover:text-white"
+            className={`text-muted transition hover:text-white ${compact ? 'hidden' : ''}`}
           >
             <SkipBack size={18} fill="currentColor" />
           </button>
@@ -95,7 +101,9 @@ export function Player({ onOpenArtist }: PlayerProps) {
             type="button"
             onClick={() => void toggle()}
             aria-label={isPlaying ? 'Pause' : 'Lecture'}
-            className="glass-play flex h-10 w-10 items-center justify-center rounded-full text-primary-contrast transition hover:scale-105 active:scale-95"
+            className={`glass-play flex items-center justify-center rounded-full text-primary-contrast transition hover:scale-105 active:scale-95 ${
+              compact ? 'h-9 w-9' : 'h-10 w-10'
+            }`}
           >
             {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
           </button>
@@ -103,7 +111,7 @@ export function Player({ onOpenArtist }: PlayerProps) {
             type="button"
             onClick={() => void next()}
             aria-label="Titre suivant"
-            className="text-muted transition hover:text-white"
+            className={`text-muted transition hover:text-white ${compact ? 'hidden' : ''}`}
           >
             <SkipForward size={18} fill="currentColor" />
           </button>
@@ -117,7 +125,7 @@ export function Player({ onOpenArtist }: PlayerProps) {
           </button>
         </div>
 
-        <div className="flex w-full max-w-2xl items-center gap-2">
+        <div className={`flex w-full max-w-2xl items-center gap-2 ${compact ? 'hidden' : ''}`}>
           <span className="hidden w-10 text-right text-[11px] tabular-nums text-muted sm:block">
             {formatTime(position)}
           </span>
@@ -127,7 +135,7 @@ export function Player({ onOpenArtist }: PlayerProps) {
       </div>
 
       {/* Contrôles sur mobile */}
-      <div className="flex shrink-0 items-center gap-2 md:hidden">
+      <div className={`flex shrink-0 items-center gap-2 md:hidden ${compact ? 'hidden' : ''}`}>
         <button
           type="button"
           onClick={toggleShuffle}
