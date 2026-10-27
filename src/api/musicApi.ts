@@ -27,7 +27,7 @@ import type {
  * Session : token JWT en localStorage, envoyé en `Authorization: Bearer`.
  */
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(
+export const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(
   /\/$/,
   '',
 );

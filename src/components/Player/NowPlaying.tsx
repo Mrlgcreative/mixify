@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 
-import { api } from '../../api/musicApi';
+import { api, BASE_URL } from '../../api/musicApi';
 import type { ArtistProfile } from '../../types/music';
 import { MixingBadge } from '../AutoMix/AutoMixToggle';
 import { Cover } from '../common/Cover';
@@ -184,7 +184,7 @@ export function NowPlaying({ open, onClose, onOpenArtist }: NowPlayingProps) {
         artist: currentTrack.artist.name,
         title: currentTrack.title,
       });
-      const res = await fetch(`http://localhost:3001/api/lyrics?${params.toString()}`, {
+      const res = await fetch(`${BASE_URL}/api/lyrics?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('mixify.token')}`,
         },

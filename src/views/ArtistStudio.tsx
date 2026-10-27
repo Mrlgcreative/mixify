@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { ImageUpload } from '../components/common/ImageUpload';
 
-import { api } from '../api/musicApi';
+import { api, BASE_URL } from '../api/musicApi';
 import { Cover } from '../components/common/Cover';
 import { useConfirm } from '../components/common/ConfirmDialog';
 import { ErrorState } from '../components/common/ErrorState';
@@ -97,7 +97,7 @@ export function ArtistStudio() {
   useEffect(() => {
     if (!artist) return;
     if (artist.verified) return;
-    fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/artists/verify`, {
+    fetch(`${BASE_URL}/api/artists/verify`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('mixify.token')}` },
     })
       .then((r) => r.json())
