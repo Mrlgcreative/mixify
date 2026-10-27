@@ -1,4 +1,4 @@
-import { Heart, Home, Library, Search, Mic2, BarChart3, ShieldCheck } from 'lucide-react';
+import { Heart, Home, Library, Search, Mic2, BarChart3 } from 'lucide-react';
 
 import { AuthPanel } from '../Auth/AuthPanel';
 import { Logo } from '../Logo/Logo';
@@ -35,9 +35,6 @@ export function Sidebar({ view, onNavigate, onSelectPlaylist }: SidebarProps) {
     ...NAV_ITEMS,
     ...(canPublish
       ? [{ view: 'artist' as const, label: 'Espace artiste', icon: Mic2 }]
-      : []),
-    ...(user?.role === 'admin'
-      ? [{ view: 'admin' as const, label: 'Administration', icon: ShieldCheck }]
       : []),
   ];
 

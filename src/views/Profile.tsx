@@ -7,6 +7,7 @@ import {
   Loader2,
   LogOut,
   Settings,
+  ShieldCheck,
   Trash2,
   UserRound,
   Users,
@@ -76,9 +77,20 @@ export function Profile({ onSelectPlaylist, onNavigate }: ProfileProps) {
           </h2>
           <p className="truncate text-sm text-muted">{user.email}</p>
         </div>
-        <span className="w-fit rounded-full bg-black/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-subtle">
-          {ROLE_LABELS[user.role] ?? user.role}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-fit rounded-full bg-black/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-subtle">
+            {ROLE_LABELS[user.role] ?? user.role}
+          </span>
+          {user.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => onNavigate('admin')}
+              className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-contrast transition hover:brightness-110"
+            >
+              <ShieldCheck size={14} /> Administration
+            </button>
+          )}
+        </div>
       </section>
 
       <div className="scrollbar-thin mt-6 flex gap-1 overflow-x-auto border-b border-line">

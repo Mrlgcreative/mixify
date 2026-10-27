@@ -1,4 +1,4 @@
-import { Home, Library, Mic2, Search, BarChart3, ShieldCheck } from 'lucide-react';
+import { Home, Library, Mic2, Search, BarChart3 } from 'lucide-react';
 
 import { useAuthStore } from '../../store/authStore';
 import type { ViewName } from '../../types/music';
@@ -23,9 +23,6 @@ export function MobileNav({ view, onNavigate, compact = false }: MobileNavProps)
     { view: 'library', label: 'Bibliothèque', icon: Library },
     ...(canPublish
       ? [{ view: 'artist' as const, label: 'Artiste', icon: Mic2 }]
-      : []),
-    ...(user?.role === 'admin'
-      ? [{ view: 'admin' as const, label: 'Admin', icon: ShieldCheck }]
       : []),
   ];
 
