@@ -222,17 +222,21 @@ interface ApiFollows {
 
 // ---------------------------------------------------------------- mappages
 
+function toGenres(raw: string | null | undefined): string[] | undefined {
+  return raw
+    ? raw
+        .split(',')
+        .map((genre) => genre.trim())
+        .filter(Boolean)
+    : undefined;
+}
+
 function toArtist(raw: ApiArtist): Artist {
   return {
     id: raw.id,
     name: raw.name,
     imageUrl: raw.image_url ?? undefined,
-    genres: raw.genres
-      ? raw.genres
-          .split(',')
-          .map((genre) => genre.trim())
-          .filter(Boolean)
-      : undefined,
+    genres: toGenres(raw.genres),
     followers: raw.followers_count ?? undefined,
     country: raw.country ?? undefined,
   };
@@ -258,6 +262,7 @@ function toTrack(raw: ApiTrack): Track {
     id: raw.artist_id ?? '',
     name: raw.artiste ?? 'Artiste inconnu',
     verified: raw.artiste_info?.verified === true,
+    genres: toGenres(raw.artiste_info?.genres),
   };
   return {
     id: raw.id,
@@ -404,6 +409,7 @@ export type PublishStage = 'upload' | 'check';
 export interface PublishInput {
   title: string;
   album?: string;
+  genre?: string;
   bpm?: number;
   year?: number;
   /** Durée en secondes, lue par le lecteur avant l'envoi. */
@@ -947,6 +953,7 @@ class MixifyApi implements MusicApi {
       body: JSON.stringify({
         title: input.title,
         album: input.album,
+        genre: input.genre,
         bpm: input.bpm,
         year: input.year,
         cover_url: input.coverUrl,

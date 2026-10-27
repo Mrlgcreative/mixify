@@ -22,6 +22,7 @@ import {
 
 import { api } from '../../api/musicApi';
 import type { ArtistProfile } from '../../types/music';
+import { MixingBadge } from '../AutoMix/AutoMixToggle';
 import { Cover } from '../common/Cover';
 import { useConfirm } from '../common/ConfirmDialog';
 import { useToast } from '../common/Toast';
@@ -82,6 +83,7 @@ export function NowPlaying({ open, onClose, onOpenArtist }: NowPlayingProps) {
   const duration = usePlayer((s) => s.duration);
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
+  const mixing = usePlayer((s) => s.mixing);
   const queueOpen = usePlayer((s) => s.queueOpen);
 
   const toggle = usePlayer((s) => s.toggle);
@@ -278,9 +280,12 @@ export function NowPlaying({ open, onClose, onOpenArtist }: NowPlayingProps) {
         <div className="space-y-3.5">
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[22px] font-semibold tracking-tight text-white">
-                {currentTrack.title}
-              </h1>
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="min-w-0 truncate text-[22px] font-semibold tracking-tight text-white">
+                  {currentTrack.title}
+                </h1>
+                {mixing && <MixingBadge />}
+              </div>
               <div className="mt-0.5 flex items-center gap-2">
                 <p className="min-w-0 truncate text-[15px] text-white/60">{currentTrack.artist.name}</p>
                 {canFollow && (

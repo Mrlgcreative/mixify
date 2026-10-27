@@ -5,18 +5,22 @@ import type { Track, MixTransition, TransitionMode } from '../types/music';
 import {
   ALBUM_GAP_SECONDS,
   AUTOMIX_MAX_SECONDS,
-  AUTOMIX_SHORT_SECONDS,
+  AUTOMIX_MIN_SECONDS,
   MAX_CROSSFADE_SECONDS,
   MIN_CROSSFADE_SECONDS,
+  autoMixAction,
   autoMixDuration,
   equalPowerCurves,
+  genresCompatible,
   matchOctave,
   normalizeBpm,
+  phraseAlignedDuration,
   planBeatSync,
-  tempoCompatible,
+  splitGenres,
   transitionProfile,
 } from './crossfade';
-import { detectKey, harmonicFadeCap, type KeyEstimate } from './harmony';
+import { detectKey, harmonicCost, harmonicFadeCap, type KeyEstimate } from './harmony';
+import { analyzeTail, type TailInfo } from './tail';
 import { estimateTempo, type TempoEstimate } from './tempo';
 
 /**
@@ -25,10 +29,10 @@ import { estimateTempo, type TempoEstimate } from './tempo';
  * Deux `<audio>` alimentent chacun un GainNode -> AnalyserNode -> master.
  * L'Auto-Mix consiste à :
  *   1. préparer le titre suivant dans le deck idle (chargement anticipé) ;
- *   2. démarrer le fondu quelques mesures avant la fin du titre courant : la
- *      durée est musicale (≈ 4 mesures, 4–12 s) et non réglée par l'utilisateur,
- *      en pilotant les deux gains avec des courbes à puissance constante
- *      (aucun trou de silence, aucun "creux" de volume) ;
+ *   2. démarrer le fondu environ 10 s avant la fin du titre courant : la
+ *      durée est fixée par l'algorithme (10–12 s, phrase alignée) et non
+ *      réglée par l'utilisateur, en pilotant les deux gains avec des courbes à
+ *      puissance constante (aucun trou de silence, aucun "creux" de volume) ;
  *   3. aligner les tempos : le titre sortant prend celui du suivant (±8 %,
  *      octave corrigée) et une pulsation entrante tombe sur sa grille
  *      (beat-sync). Les BPM viennent d'une analyse du signal
@@ -39,8 +43,11 @@ import { estimateTempo, type TempoEstimate } from './tempo';
  *      native et fondu simple.
  *
  * Comme Apple Music : deux titres d'un même album s'enchaînent sans mix
- * dynamique, un tempo incompatible donne un fondu court sans beat-match, et le
- * mode `crossfade` est un simple fondu de durée fixe, sans traitement.
+ * dynamique, une paire incompatible (tempo, genre, harmonie) ou une fin à
+ * froid donne un enchaînement quasi direct, et le mode `crossfade` est un
+ * simple fondu de durée fixe, sans traitement. Quand le tempo est connu, le
+ * début du fondu est calé sur une frontière de phrase (4 mesures) plutôt que
+ * sur une durée brute.
  *
  * shortcut: les flux doivent être servis avec des en-têtes CORS
  * (`Access-Control-Allow-Origin`), sinon la Web Audio API produit du silence
@@ -50,6 +57,13 @@ import { estimateTempo, type TempoEstimate } from './tempo';
 const ARM_LEAD_SECONDS = 2.5; // marge de préparation avant la fin du titre
 const LEAD_IN_SECONDS = 0.25; // démarrage anticipé du titre entrant
 const TICK_MS = 100;
+
+/** Genre du morceau, avec repli sur les genres de l'artiste. */
+function genresOf(track: Track | null): string[] {
+  if (!track) return [];
+  if (track.genre) return splitGenres(track.genre);
+  return (track.artist.genres ?? []).flatMap((genre) => splitGenres(genre));
+}
 
 interface Deck {
   el: HTMLAudioElement;
@@ -112,13 +126,15 @@ export class AudioEngine {
   private readonly beats = new Map<string, TempoEstimate | null>();
   /** Tonalité estimée par URL (null = indéterminée, voir harmony.ts). */
   private readonly keys = new Map<string, KeyEstimate | null>();
+  /** Fin estimée par URL (null = analyse non concluante, voir tail.ts). */
+  private readonly tails = new Map<string, TailInfo | null>();
   private readonly analyzing = new Set<string>();
 
   /** Branchement du worklet SoundTouch (une seule fois par contexte). */
   private shifters: Promise<void> | null = null;
 
   private armed = false;
-  private fadePlan: { startAt: number; endAt: number } | null = null;
+  private fadePlan: { startAt: number; endAt: number; mixing: boolean } | null = null;
   private startTimer: number | null = null;
 
   private lastMedia = 0;
@@ -395,7 +411,7 @@ export class AudioEngine {
     }
 
     // Début du fondu : on signale l'état « Mixage ».
-    if (this.fadePlan && !this.mixing && this.ctx.currentTime >= this.fadePlan.startAt) {
+    if (this.fadePlan?.mixing && !this.mixing && this.ctx.currentTime >= this.fadePlan.startAt) {
       this.setMixing(true);
     }
 
@@ -466,46 +482,60 @@ export class AudioEngine {
     const outBpm = outBeat?.bpm ?? normalizeBpm(outgoing.track?.bpm);
     const inBpm = matchOctave(outBpm, inBeat?.bpm ?? normalizeBpm(this.nextTrack.bpm));
     const knownTempo = outBpm > 0 && inBpm > 0;
-    const compatible = tempoCompatible(outBpm, inBpm);
     const sameAlbum =
       !!outgoing.track?.album?.id &&
       !!this.nextTrack.album?.id &&
       outgoing.track.album.id === this.nextTrack.album.id;
     const style = this.nextTransition?.style ?? null;
+    const outKey = this.keys.get(outgoing.url) ?? null;
+    const inKey = this.keys.get(this.nextUrl) ?? null;
+    const harmonic = outKey && inKey ? harmonicCost(outKey, inKey) : null;
+    const action =
+      this.mode === 'crossfade'
+        ? 'crossfade'
+        : autoMixAction({
+            sameAlbum,
+            outBpm,
+            inBpm,
+            genreCompatible: genresCompatible(genresOf(outgoing.track), genresOf(this.nextTrack)),
+            harmonic,
+            outro: this.tails.get(outgoing.url)?.kind ?? null,
+            style,
+          });
 
-    // AutoMix à la manière d'Apple Music :
-    //  - même album en lecture séquentielle -> enchaînement quasi direct ;
-    //  - tempos compatibles -> fondu de 4 mesures avec beat-match ;
-    //  - tempos incompatibles -> fondu court, sans beat-match ;
-    //  - Crossfade -> simple fondu de durée fixe, sans traitement.
-    // Le style de l'IA reste un "assaisonnement" (écho, filtre), jamais un cut.
+    // AutoMix façon Apple Music : on ne mixe que si la paire s'y prête.
+    // Sinon, enchaînement quasi direct (0,3 s), sans beat-match, sans
+    // traitement de style et sans indicateur « Mixage ».
     let profile = 'crossfade';
     let beatSync = false;
+    let showMixing = true;
     let fadeDuration: number;
 
     if (this.mode === 'crossfade') {
       fadeDuration = this.crossfadeSeconds;
-    } else if (sameAlbum) {
+    } else if (action !== 'mix') {
       fadeDuration = ALBUM_GAP_SECONDS;
+      showMixing = false;
     } else {
       profile = style && style !== 'cut' ? style : 'blend';
-      if (knownTempo && !compatible) {
-        fadeDuration = AUTOMIX_SHORT_SECONDS;
-      } else {
-        fadeDuration = autoMixDuration(outBpm);
-        beatSync =
-          knownTempo && compatible && style !== 'cut' && this.nextTransition?.tempoSync !== false;
-      }
+      beatSync = knownTempo && this.nextTransition?.tempoSync !== false;
+      fadeDuration = phraseAlignedDuration({
+        position,
+        duration,
+        outBpm,
+        outPhase: outBeat?.phase ?? 0,
+        outRate: outgoing.rate,
+        desired: autoMixDuration(outBpm),
+        min: AUTOMIX_MIN_SECONDS,
+        max: AUTOMIX_MAX_SECONDS,
+      });
     }
 
     fadeDuration = Math.min(fadeDuration, remaining);
 
-    // Harmonie : deux tonalités éloignées superposées longtemps sonnent faux.
-    // On raccourcit alors le croisement au lieu de le supprimer (le fondu
-    // reste enchaîné, les deux morceaux ne se chevauchent presque plus).
-    if (this.mode === 'automix' && !sameAlbum) {
-      const outKey = this.keys.get(outgoing.url) ?? null;
-      const inKey = this.keys.get(this.nextUrl) ?? null;
+    // Harmonie : une tonalité voisine (coût 2) raccourcit le fondu ; une
+    // dissonance (coût 3) a déjà été transformée en enchaînement ci-dessus.
+    if (action === 'mix') {
       fadeDuration = harmonicFadeCap(fadeDuration, outKey, inKey);
     }
 
@@ -546,7 +576,7 @@ export class AudioEngine {
 
     const fadeStartAbs = ctx.currentTime + plan.fadeStart;
     const fadeEndAbs = fadeStartAbs + fadeDuration;
-    this.fadePlan = { startAt: fadeStartAbs, endAt: fadeEndAbs };
+    this.fadePlan = { startAt: fadeStartAbs, endAt: fadeEndAbs, mixing: showMixing };
 
     // Démarrage du titre entrant légèrement avant le début du fondu : c'est
     // à cet instant que le sortant prend le tempo du suivant (±8 %).
@@ -704,18 +734,19 @@ export class AudioEngine {
   private startBeatAnalysis(url: string): void {
     if (!url || this.analyzing.has(url) || this.beats.has(url)) return;
     this.analyzing.add(url);
-    void this.analyze(url).then(({ tempo, key }) => {
+    void this.analyze(url).then(({ tempo, key, tail }) => {
       this.beats.set(url, tempo);
       this.keys.set(url, key);
+      this.tails.set(url, tail);
       this.analyzing.delete(url);
     });
   }
 
   private async analyze(
     url: string,
-  ): Promise<{ tempo: TempoEstimate | null; key: KeyEstimate | null }> {
+  ): Promise<{ tempo: TempoEstimate | null; key: KeyEstimate | null; tail: TailInfo | null }> {
     const ctx = this.ctx;
-    if (!ctx) return { tempo: null, key: null };
+    if (!ctx) return { tempo: null, key: null, tail: null };
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -727,9 +758,10 @@ export class AudioEngine {
       return {
         tempo: (await libraryTempo(audio)) ?? estimateTempo(mono, audio.sampleRate),
         key: detectKey(mono, audio.sampleRate),
+        tail: analyzeTail(mono, audio.sampleRate),
       };
     } catch {
-      return { tempo: null, key: null }; // flux non récupérable : fondu simple
+      return { tempo: null, key: null, tail: null }; // flux non récupérable : fondu simple
     }
   }
 

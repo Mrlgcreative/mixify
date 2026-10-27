@@ -5,6 +5,8 @@
  * hors navigateur (voir crossfade.test.ts).
  */
 
+import type { OutroKind } from './tail';
+
 /** Hypothèse métrique : 4 temps par mesure. */
 export const BEATS_PER_BAR = 4;
 
@@ -13,15 +15,14 @@ export const MIN_CROSSFADE_SECONDS = 1;
 export const MAX_CROSSFADE_SECONDS = 12;
 
 /**
- * AutoMix façon Apple Music : la durée n'est pas réglée par l'utilisateur mais
- * déduite de la musique. On vise 4 mesures, bornées pour rester un fondu.
+ * AutoMix : durée cible de 10 s, assez longue pour un vrai chevauchement
+ * beatmatché. Le tempo ne la fixe plus ; la frontière de phrase la décale
+ * seulement de quelques secondes, dans la plage 10–12 s.
  */
-export const AUTOMIX_BARS = 4;
-export const AUTOMIX_MIN_SECONDS = 4;
+export const AUTOMIX_SECONDS = 10;
+export const AUTOMIX_MIN_SECONDS = 10;
 export const AUTOMIX_MAX_SECONDS = 12;
-/** Fondu court quand tempo (ou style) ne se prête pas au beat-match. */
-export const AUTOMIX_SHORT_SECONDS = 1.2;
-/** Deux titres d'un même album s'enchaînent sans mix dynamique (gapless). */
+/** Enchaînement sans mix dynamique : même album ou paire qui ne s'y prête pas. */
 export const ALBUM_GAP_SECONDS = 0.3;
 
 /** Durée d'une pulsation (s). */
@@ -81,11 +82,127 @@ export function tempoCompatible(outBpm: number, inBpm: number, maxDeviation = 0.
   return Math.abs(matchOctave(outBpm, inBpm) / outBpm - 1) <= maxDeviation;
 }
 
-/** Durée du fondu AutoMix : 4 mesures du titre sortant, bornée à 4–12 s. */
-export function autoMixDuration(outBpm: number): number {
-  if (!outBpm || outBpm <= 0) return AUTOMIX_MIN_SECONDS;
-  const bars = barInterval(outBpm) * AUTOMIX_BARS;
-  return Math.min(AUTOMIX_MAX_SECONDS, Math.max(AUTOMIX_MIN_SECONDS, bars));
+/** Durée du fondu AutoMix : 10 s, indépendante du tempo (la phrase peut la décaler). */
+export function autoMixDuration(_outBpm?: number): number {
+  return AUTOMIX_SECONDS;
+}
+
+/** Nombre de mesures d'une phrase musicale (approximation 4/4). */
+export const PHRASE_BARS = 4;
+
+/**
+ * Décale le début du fondu sur une frontière de phrase (4 mesures) du titre
+ * sortant, sans dépasser les bornes de durée.
+ *
+ * Apple Music cherche un « sweet spot » près de la fin plutôt que de couper
+ * une phrase au hasard. On prend la première frontière de phrase après la
+ * durée idéale ; si elle laisse un fondu trop court, on recule d'une phrase.
+ * `shortcut: la grille est celle du tempo détecté, pas une analyse des phrases
+ * vocales ; c'est une approximation musicale, pas une transcription.`
+ */
+export function phraseAlignedDuration(params: {
+  position: number;
+  duration: number;
+  outBpm: number;
+  outPhase?: number;
+  outRate: number;
+  desired: number;
+  min?: number;
+  max?: number;
+  phraseBars?: number;
+}): number {
+  const { position, duration, outBpm, outRate, desired } = params;
+  const outPhase = params.outPhase ?? 0;
+  const min = params.min ?? AUTOMIX_MIN_SECONDS;
+  const max = params.max ?? AUTOMIX_MAX_SECONDS;
+  const phrase = barInterval(outBpm) * (params.phraseBars ?? PHRASE_BARS);
+  if (!outBpm || outBpm <= 0 || !outRate || phrase <= 0 || duration <= position) {
+    return desired;
+  }
+
+  const remaining = (duration - position) / outRate;
+  const target = remaining - desired;
+  const media = position + target * outRate;
+  let k = Math.ceil((media - outPhase) / phrase);
+  let fade = remaining - (outPhase + k * phrase - position) / outRate;
+
+  if (fade < min) {
+    k -= 1;
+    fade = remaining - (outPhase + k * phrase - position) / outRate;
+  }
+
+  return fade >= min && fade <= max ? fade : desired;
+}
+
+export type AutoMixAction = 'album' | 'handoff' | 'mix';
+
+export interface AutoMixInput {
+  sameAlbum: boolean;
+  outBpm: number;
+  inBpm: number;
+  /** null = genre inconnu : on ne bloque pas. */
+  genreCompatible: boolean | null;
+  /** Coût harmonique Camelot (0–3), null = tonalité inconnue. */
+  harmonic: number | null;
+  /** Fin du sortant, null = analyse pas encore prête. */
+  outro: OutroKind | null;
+  style?: string | null;
+}
+
+/**
+ * Décide entre un vrai mix et un simple enchaînement, comme Apple Music :
+ *  - même album → enchaînement quasi direct ;
+ *  - tempo, genre ou tonalité incompatibles → pas de mix dynamique ;
+ *  - fin à froid ou silencieuse → on laisse le morceau finir ;
+ *  - un `cut` demandé par l'IA devient un enchaînement, jamais une coupe.
+ */
+export function autoMixAction(input: AutoMixInput): AutoMixAction {
+  if (input.sameAlbum) return 'album';
+  if (!input.outBpm || !input.inBpm || !tempoCompatible(input.outBpm, input.inBpm)) {
+    return 'handoff';
+  }
+  if (input.genreCompatible === false) return 'handoff';
+  if (input.outro === 'silent' || input.outro === 'cold') return 'handoff';
+  if (input.style === 'cut') return 'handoff';
+  if ((input.harmonic ?? 0) >= 3) return 'handoff';
+  return 'mix';
+}
+
+/** Normalise un genre libre : minuscules, sans accents, alias courants. */
+export function splitGenres(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .toLowerCase()
+    .replace(/r\s*&\s*b/g, 'rnb')
+    .replace(/hip[\s-]*hop/g, 'hiphop')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[,;/]+/)
+    .map((genre) => genre.trim().replace(/\s+/g, ' '))
+    .filter(Boolean);
+}
+
+/**
+ * Deux genres sont compatibles s'ils partagent un mot, un préfixe significatif
+ * ou une sous-chaîne (« pop » / « pop rock »). `null` = donnée manquante, on ne
+ * bloque pas : mieux vaut mixer que refuser sur une étiquette absente.
+ */
+export function genresCompatible(
+  a: readonly string[],
+  b: readonly string[],
+): boolean | null {
+  const first = a.flatMap((genre) => splitGenres(genre));
+  const second = b.flatMap((genre) => splitGenres(genre));
+  if (first.length === 0 || second.length === 0) return null;
+  return first.some((x) =>
+    second.some(
+      (y) =>
+        x === y ||
+        x.includes(y) ||
+        y.includes(x) ||
+        (x.length >= 4 && y.length >= 4 && x.slice(0, 4) === y.slice(0, 4)),
+    ),
+  );
 }
 
 /**

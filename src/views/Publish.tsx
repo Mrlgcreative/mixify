@@ -15,6 +15,7 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
   const [preview, setPreview] = useState('');
   const [title, setTitle] = useState('');
   const [album, setAlbum] = useState('');
+  const [genre, setGenre] = useState('');
   const [cover, setCover] = useState('');
   const [bpm, setBpm] = useState('');
   const [year, setYear] = useState('');
@@ -65,6 +66,7 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
         {
           title: title.trim(),
           album: album.trim() || undefined,
+          genre: genre.trim() || undefined,
           bpm: bpm ? Number(bpm) : undefined,
           year: year ? Number(year) : undefined,
           duration: duration || undefined,
@@ -75,6 +77,7 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
       );
       choose(null);
       setAlbum('');
+      setGenre('');
       setCover('');
       setBpm('');
       setYear('');
@@ -183,6 +186,15 @@ export function Publish({ onPublished }: { onPublished?: () => void } = {}) {
             className={inputClass}
           />
         </div>
+
+        <input
+          value={genre}
+          onChange={(event) => setGenre(event.target.value)}
+          placeholder="Genre (optionnel) — ex. Rap, Gospel, Afrobeat"
+          aria-label="Genre"
+          maxLength={100}
+          className={inputClass}
+        />
 
         <button
           type="submit"

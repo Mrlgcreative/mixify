@@ -7,7 +7,7 @@ const OPTIONS: Array<{ id: TransitionMode; label: string; hint: string }> = [
   {
     id: 'automix',
     label: 'AutoMix',
-    hint: 'Fondu beatmatché à durée musicale, avec échange de basses.',
+    hint: 'Fondu beatmatché d’environ 10 s, avec échange de basses.',
   },
   {
     id: 'crossfade',
@@ -29,7 +29,8 @@ export function TransitionSettings() {
     <div className="px-4 py-4">
       <p className="text-sm font-semibold text-white">Transitions entre titres</p>
       <p className="mb-3 mt-1 text-xs text-muted">
-        Comme dans Apple Music : l’AutoMix choisit lui-même la durée du fondu d’après la musique.
+        Comme dans Apple Music : l’AutoMix dure environ 10 s et se cale sur les phrases ; seul
+        le fondu enchaîné se règle à la main.
       </p>
 
       <div role="radiogroup" aria-label="Transition entre titres" className="space-y-2">
@@ -104,9 +105,9 @@ export function TransitionSettings() {
 
       {transitionStyle === 'automix' && (
         <p className="mt-3 text-xs leading-relaxed text-muted">
-          L’AutoMix aligne tempo et mesures, puis échange les basses au milieu du fondu. Il
-          s’efface pour les albums lus dans l’ordre, les tempos incompatibles et les morceaux sans
-          rythme détectable.
+          L’AutoMix dure environ 10 s, aligne tempo et mesures, puis échange les basses au milieu
+          du fondu. Il s’efface quand la paire ne s’y prête pas : album lu dans l’ordre, tempo ou
+          genre incompatible, fin à froid ou silencieuse.
         </p>
       )}
     </div>

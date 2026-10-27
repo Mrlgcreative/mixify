@@ -8,6 +8,10 @@ import {
   tempoRatio,
   barInterval,
   autoMixDuration,
+  autoMixAction,
+  genresCompatible,
+  phraseAlignedDuration,
+  splitGenres,
   matchOctave,
   normalizeBpm,
   tempoCompatible,
@@ -221,15 +225,12 @@ test('bornes du réglage crossfade', () => {
   assert.equal(MAX_CROSSFADE_SECONDS, 12);
 });
 
-test('autoMixDuration : 4 mesures du sortant, borné à 4–12 s', () => {
-  // 120 BPM : une mesure = 2 s, donc 8 s.
-  assert.equal(autoMixDuration(120), 8);
-  // 60 BPM : 4 mesures = 16 s, ramené à 12 s.
-  assert.equal(autoMixDuration(60), 12);
-  // 180 BPM : 4 mesures = 5,33 s.
-  assert.ok(Math.abs(autoMixDuration(180) - 16 / 3) < 1e-6);
-  // 300 BPM : 4 mesures = 3,2 s, remonté à 4 s.
-  assert.equal(autoMixDuration(300), 4);
+test('autoMixDuration : 10 s quelle que soit la valeur de tempo', () => {
+  assert.equal(AUTOMIX_MIN_SECONDS, 10);
+  assert.equal(autoMixDuration(120), 10);
+  assert.equal(autoMixDuration(60), 10);
+  assert.equal(autoMixDuration(180), 10);
+  assert.equal(autoMixDuration(300), 10);
   assert.equal(autoMixDuration(0), AUTOMIX_MIN_SECONDS);
 });
 
@@ -277,4 +278,100 @@ test('transitionProfile : AutoMix échange les basses par défaut', () => {
   assert.equal(transitionProfile('crossfade', 120, 8).outBassGain, 0);
   assert.equal(transitionProfile('bass_swap', 120, 0.3).outBassGain, 0);
   assert.equal(transitionProfile('cut', 120, 8).outBassGain, 0);
+});
+
+test('autoMixAction : on ne mixe que si la paire s’y prête', () => {
+  const base = {
+    sameAlbum: false,
+    outBpm: 120,
+    inBpm: 124,
+    genreCompatible: true as boolean | null,
+    harmonic: 0 as number | null,
+    outro: 'quiet' as const,
+    style: 'blend' as const,
+  };
+
+  assert.equal(autoMixAction(base), 'mix');
+  assert.equal(autoMixAction({ ...base, sameAlbum: true }), 'album');
+  assert.equal(autoMixAction({ ...base, outBpm: 0 }), 'handoff', 'tempo inconnu');
+  assert.equal(autoMixAction({ ...base, inBpm: 150 }), 'handoff', 'tempo incompatible');
+  assert.equal(autoMixAction({ ...base, genreCompatible: false }), 'handoff', 'genre incompatible');
+  assert.equal(autoMixAction({ ...base, outro: 'cold' }), 'handoff', 'fin à froid');
+  assert.equal(autoMixAction({ ...base, outro: 'silent' }), 'handoff', 'silence final');
+  assert.equal(autoMixAction({ ...base, style: 'cut' }), 'handoff', 'cut adouci');
+  assert.equal(autoMixAction({ ...base, harmonic: 3 }), 'handoff', 'dissonance');
+  assert.equal(autoMixAction({ ...base, harmonic: 2 }), 'mix', 'voisin harmonique accepté');
+  assert.equal(autoMixAction({ ...base, genreCompatible: null }), 'mix', 'genre inconnu');
+});
+
+test('splitGenres / genresCompatible : normalisation et familles proches', () => {
+  assert.deepEqual(splitGenres('Rap, Hip-Hop / R&B'), ['rap', 'hiphop', 'rnb']);
+  assert.deepEqual(splitGenres('Chant chrétien'), ['chant chretien']);
+  assert.equal(genresCompatible(['Rap'], ['rap']), true);
+  assert.equal(genresCompatible(['pop'], ['pop rock']), true, 'sous-chaîne');
+  assert.equal(genresCompatible(['romance'], ['romantique']), true, 'préfixe significatif');
+  assert.equal(genresCompatible(['Rap'], ['romance']), false);
+  assert.equal(genresCompatible(['rap'], []), null, 'genre manquant');
+});
+
+test('phraseAlignedDuration : le fondu démarre sur une phrase de 4 mesures', () => {
+  // 120 BPM : phrase de 8 s. À 12 s de la fin, la grille ne propose que 7 s
+  // ou 15 s ; aucune ne tient dans 10–12 s, on garde la cible de 10 s.
+  assert.equal(
+    phraseAlignedDuration({ position: 179, duration: 191, outBpm: 120, outRate: 1, desired: 10 }),
+    10,
+  );
+
+  // La phase de la grille décale la frontière.
+  assert.equal(
+    phraseAlignedDuration({
+      position: 179,
+      duration: 191,
+      outBpm: 120,
+      outPhase: 0.5,
+      outRate: 1,
+      desired: 10,
+    }),
+    10,
+  );
+
+  // Frontière à 176 s : 11 s de fondu, dans la plage 10–12 s.
+  assert.equal(
+    phraseAlignedDuration({ position: 175, duration: 187, outBpm: 120, outRate: 1, desired: 10 }),
+    11,
+  );
+  assert.equal(
+    phraseAlignedDuration({
+      position: 175,
+      duration: 187,
+      outBpm: 120,
+      outPhase: 0.5,
+      outRate: 1,
+      desired: 10,
+    }),
+    10.5,
+  );
+
+  // 128 BPM (phrase de 7,5 s) : la frontière à 180 s laisse 11 s.
+  assert.equal(
+    phraseAlignedDuration({
+      position: 170,
+      duration: 191,
+      outBpm: 128,
+      outRate: 1,
+      desired: autoMixDuration(128),
+    }),
+    11,
+  );
+
+  // Sans tempo fiable ou quand aucune frontière ne tient dans les bornes,
+  // on garde la durée cible.
+  assert.equal(
+    phraseAlignedDuration({ position: 175, duration: 187, outBpm: 0, outRate: 1, desired: 10 }),
+    10,
+  );
+  assert.equal(
+    phraseAlignedDuration({ position: 175, duration: 191, outBpm: 60, outRate: 1, desired: 12 }),
+    12,
+  );
 });
