@@ -918,7 +918,7 @@ class MixifyApi implements MusicApi {
       headers?: Record<string, string>;
     }>('/api/upload/image', {
       method: 'POST',
-      body: JSON.stringify({ filename: file.name, contentType, folder }),
+      body: JSON.stringify({ filename: file.name, contentType, size: file.size, folder }),
     });
 
     await putFile(uploadUrl, file, headers ?? { 'Content-Type': contentType });
@@ -939,7 +939,7 @@ class MixifyApi implements MusicApi {
       headers?: Record<string, string>;
     }>('/api/tracks/upload-url', {
       method: 'POST',
-      body: JSON.stringify({ filename: file.name, contentType }),
+      body: JSON.stringify({ filename: file.name, contentType, size: file.size }),
     });
 
     // PUT direct vers R2 : pas de token Mixify dans cet appel (URL présignée).
