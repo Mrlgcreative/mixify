@@ -226,8 +226,8 @@ export default function App() {
         <main
           className={`flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-panel md:bg-grid md:bg-panel md:pb-0 ${
             hasTrack
-              ? 'pb-[calc(96px+64px+env(safe-area-inset-bottom)+16px)]'
-              : 'pb-[calc(64px+env(safe-area-inset-bottom)+12px)]'
+              ? 'pb-[calc(104px+64px+env(safe-area-inset-bottom)+16px)]'
+              : 'pb-[calc(72px+env(safe-area-inset-bottom)+12px)]'
           }`}
         >
           <Header

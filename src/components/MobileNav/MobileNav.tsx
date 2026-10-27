@@ -62,14 +62,14 @@ export function MobileNav({ view, onNavigate, compact = false }: MobileNavProps)
       </div>
 
       <div
-        className={`fixed inset-x-2 bottom-[calc(8px+env(safe-area-inset-bottom))] z-40 flex justify-center transition-all duration-300 motion-reduce:transition-none md:hidden ${
+        className={`fixed inset-x-2 bottom-[calc(16px+env(safe-area-inset-bottom))] z-40 flex justify-center transition-all duration-300 motion-reduce:transition-none md:hidden ${
           compact ? 'pointer-events-none translate-y-24 opacity-0' : 'translate-y-0 opacity-100'
         }`}
       >
         <nav
           aria-label="Navigation principale"
           aria-hidden={compact}
-          className="glass relative flex w-full max-w-[420px] items-center justify-between rounded-[22px] px-1.5 py-1.5"
+          className="glass relative flex w-auto min-w-[min(300px,100%)] max-w-[420px] items-center justify-between rounded-full px-1.5 py-1.5"
         >
           {items.map((item) => {
             const Icon = item.icon;
