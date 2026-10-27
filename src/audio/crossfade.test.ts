@@ -287,7 +287,6 @@ test('autoMixAction : on ne mixe que si la paire s’y prête', () => {
     inBpm: 124,
     genreCompatible: true as boolean | null,
     harmonic: 0 as number | null,
-    outro: 'quiet' as const,
     style: 'blend' as const,
   };
 
@@ -296,8 +295,6 @@ test('autoMixAction : on ne mixe que si la paire s’y prête', () => {
   assert.equal(autoMixAction({ ...base, outBpm: 0 }), 'handoff', 'tempo inconnu');
   assert.equal(autoMixAction({ ...base, inBpm: 150 }), 'handoff', 'tempo incompatible');
   assert.equal(autoMixAction({ ...base, genreCompatible: false }), 'handoff', 'genre incompatible');
-  assert.equal(autoMixAction({ ...base, outro: 'cold' }), 'handoff', 'fin à froid');
-  assert.equal(autoMixAction({ ...base, outro: 'silent' }), 'handoff', 'silence final');
   assert.equal(autoMixAction({ ...base, style: 'cut' }), 'handoff', 'cut adouci');
   assert.equal(autoMixAction({ ...base, harmonic: 3 }), 'handoff', 'dissonance');
   assert.equal(autoMixAction({ ...base, harmonic: 2 }), 'mix', 'voisin harmonique accepté');

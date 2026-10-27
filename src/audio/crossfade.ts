@@ -5,8 +5,6 @@
  * hors navigateur (voir crossfade.test.ts).
  */
 
-import type { OutroKind } from './tail';
-
 /** Hypothèse métrique : 4 temps par mesure. */
 export const BEATS_PER_BAR = 4;
 
@@ -144,8 +142,6 @@ export interface AutoMixInput {
   genreCompatible: boolean | null;
   /** Coût harmonique Camelot (0–3), null = tonalité inconnue. */
   harmonic: number | null;
-  /** Fin du sortant, null = analyse pas encore prête. */
-  outro: OutroKind | null;
   style?: string | null;
 }
 
@@ -153,8 +149,10 @@ export interface AutoMixInput {
  * Décide entre un vrai mix et un simple enchaînement, comme Apple Music :
  *  - même album → enchaînement quasi direct ;
  *  - tempo, genre ou tonalité incompatibles → pas de mix dynamique ;
- *  - fin à froid ou silencieuse → on laisse le morceau finir ;
  *  - un `cut` demandé par l'IA devient un enchaînement, jamais une coupe.
+ *
+ * La fin du morceau (silence, accord tenu) n'empêche pas le mix : le fondu
+ * s'arrête à la fin audible, le silence résiduel est sauté.
  */
 export function autoMixAction(input: AutoMixInput): AutoMixAction {
   if (input.sameAlbum) return 'album';
@@ -162,7 +160,6 @@ export function autoMixAction(input: AutoMixInput): AutoMixAction {
     return 'handoff';
   }
   if (input.genreCompatible === false) return 'handoff';
-  if (input.outro === 'silent' || input.outro === 'cold') return 'handoff';
   if (input.style === 'cut') return 'handoff';
   if ((input.harmonic ?? 0) >= 3) return 'handoff';
   return 'mix';

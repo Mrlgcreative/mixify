@@ -106,8 +106,8 @@ export function TransitionSettings() {
       {transitionStyle === 'automix' && (
         <p className="mt-3 text-xs leading-relaxed text-muted">
           L’AutoMix dure environ 10 s, aligne tempo et mesures, puis échange les basses au milieu
-          du fondu. Il s’efface quand la paire ne s’y prête pas : album lu dans l’ordre, tempo ou
-          genre incompatible, fin à froid ou silencieuse.
+          du fondu. Il s’efface quand la paire ne s’y prête pas : album lu dans l’ordre, tempo,
+          genre ou tonalité incompatibles. Le silence final des fichiers est sauté.
         </p>
       )}
     </div>

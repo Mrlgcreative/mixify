@@ -43,11 +43,11 @@ import { estimateTempo, type TempoEstimate } from './tempo';
  *      native et fondu simple.
  *
  * Comme Apple Music : deux titres d'un même album s'enchaînent sans mix
- * dynamique, une paire incompatible (tempo, genre, harmonie) ou une fin à
- * froid donne un enchaînement quasi direct, et le mode `crossfade` est un
- * simple fondu de durée fixe, sans traitement. Quand le tempo est connu, le
- * début du fondu est calé sur une frontière de phrase (4 mesures) plutôt que
- * sur une durée brute.
+ * dynamique, une paire incompatible (tempo, genre, harmonie) donne un
+ * enchaînement quasi direct, et le mode `crossfade` est un simple fondu de
+ * durée fixe, sans traitement. Quand le tempo est connu, le début du fondu est
+ * calé sur une frontière de phrase (4 mesures) plutôt que sur une durée brute,
+ * et un silence final éventuel est sauté.
  *
  * shortcut: les flux doivent être servis avec des en-têtes CORS
  * (`Access-Control-Allow-Origin`), sinon la Web Audio API produit du silence
@@ -58,11 +58,21 @@ const ARM_LEAD_SECONDS = 2.5; // marge de préparation avant la fin du titre
 const LEAD_IN_SECONDS = 0.25; // démarrage anticipé du titre entrant
 const TICK_MS = 100;
 
-/** Genre du morceau, avec repli sur les genres de l'artiste. */
+/** Genre du morceau. Le genre d'artiste est trop grossier (un rappeur peut
+ * publier un chant) : sans genre de titre, on ne bloque pas le mix. */
 function genresOf(track: Track | null): string[] {
-  if (!track) return [];
-  if (track.genre) return splitGenres(track.genre);
-  return (track.artist.genres ?? []).flatMap((genre) => splitGenres(genre));
+  return track?.genre ? splitGenres(track.genre) : [];
+}
+
+/**
+ * Phase du détecteur, seulement si son BPM concorde avec le BPM publié.
+ * Un détecteur qui annonce 141 BPM pour un titre à 120 donne aussi une phase
+ * fausse : mieux vaut supposer la grille alignée sur le début.
+ */
+function phaseFor(beat: TempoEstimate | null, apiBpm: number): number {
+  if (!beat) return 0;
+  if (!apiBpm) return beat.phase;
+  return Math.abs(matchOctave(apiBpm, beat.bpm) / apiBpm - 1) <= 0.02 ? beat.phase : 0;
 }
 
 interface Deck {
@@ -424,11 +434,15 @@ export class AudioEngine {
     // Fenêtre de fondu : on prépare la transition. En AutoMix la durée est
     // musicale (jusqu'à 12 s), donc on arme plus tôt que pour un crossfade.
     if (this.mode !== 'off' && this.nextTrack && !this.armed && duration > 0) {
-      const remaining = (duration - position) / deck.rate;
+      // Un silence final appartient au fichier, pas au morceau : le fondu
+      // s'arrête à la fin audible et saute ce silence.
+      const tail = this.tails.get(deck.url) ?? null;
+      const audibleEnd = duration - (tail?.kind === 'silent' ? tail.silence : 0);
+      const remaining = (audibleEnd - position) / deck.rate;
       const window =
         (this.mode === 'crossfade' ? this.crossfadeSeconds : AUTOMIX_MAX_SECONDS) + ARM_LEAD_SECONDS;
       if (remaining <= window) {
-        void this.armCrossfade(position, duration);
+        void this.armCrossfade(position, audibleEnd);
       }
     }
   };
@@ -475,12 +489,17 @@ export class AudioEngine {
     // Le fondu ne peut pas dépasser la durée restante du titre sortant,
     // sinon la piste sortirait du fondu et laisserait un trou de silence.
     const remaining = Math.max(0, (duration - position) / outgoing.rate);
-    // Les estimations du signal passent avant les BPM de l'API, parfois
-    // doublés (un morceau à 128 BPM annoncé à 256).
+    // Le BPM publié fait foi. Le détecteur de signal dérive sur les morceaux
+    // non carrés (141 BPM pour un titre annoncé à 120) ; il ne sert qu'en
+    // secours quand la métadonnée manque.
     const outBeat = this.beats.get(outgoing.url) ?? null;
     const inBeat = this.beats.get(this.nextUrl) ?? null;
-    const outBpm = outBeat?.bpm ?? normalizeBpm(outgoing.track?.bpm);
-    const inBpm = matchOctave(outBpm, inBeat?.bpm ?? normalizeBpm(this.nextTrack.bpm));
+    const outApiBpm = normalizeBpm(outgoing.track?.bpm);
+    const inApiBpm = normalizeBpm(this.nextTrack.bpm);
+    const outBpm = outApiBpm || outBeat?.bpm || 0;
+    const inBpm = matchOctave(outBpm, inApiBpm || inBeat?.bpm || 0);
+    const outPhase = phaseFor(outBeat, outApiBpm);
+    const inPhase = phaseFor(inBeat, inApiBpm);
     const knownTempo = outBpm > 0 && inBpm > 0;
     const sameAlbum =
       !!outgoing.track?.album?.id &&
@@ -499,7 +518,6 @@ export class AudioEngine {
             inBpm,
             genreCompatible: genresCompatible(genresOf(outgoing.track), genresOf(this.nextTrack)),
             harmonic,
-            outro: this.tails.get(outgoing.url)?.kind ?? null,
             style,
           });
 
@@ -523,7 +541,7 @@ export class AudioEngine {
         position,
         duration,
         outBpm,
-        outPhase: outBeat?.phase ?? 0,
+        outPhase,
         outRate: outgoing.rate,
         desired: autoMixDuration(outBpm),
         min: AUTOMIX_MIN_SECONDS,
@@ -553,8 +571,8 @@ export class AudioEngine {
       crossfade: fadeDuration,
       outBpm: beatSync ? outBpm : 0,
       inBpm: beatSync ? inBpm : 0,
-      outPhase: outBeat?.phase ?? 0,
-      inPhase: inBeat?.phase ?? 0,
+      outPhase,
+      inPhase,
       outRate: outgoing.rate,
       leadIn: LEAD_IN_SECONDS,
       inDuration: this.nextTrack.duration ?? 0,
