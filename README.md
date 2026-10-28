@@ -56,8 +56,13 @@ faut donc resynchroniser avant de reconstruire l'APK.
 L'origine de la WebView Android est `https://localhost` (iOS :
 `capacitor://localhost`). Elle doit figurer dans `ALLOWED_ORIGINS` côté backend
 **et** dans la règle CORS du bucket R2, sinon les appels API et les uploads
-échouent. La connexion Google est refusée par Google dans une WebView
-(`disallowed_useragent`) : elle reste réservée au navigateur.
+échouent.
+
+La connexion Google passe par le navigateur système (Custom Tab), jamais par la
+WebView : le retour se fait par le deep link `com.imasomo.mixify://auth` avec un
+code court lié à PKCE, puis l'app échange ce code contre un jeton. Le backend
+déployé doit donc contenir `/api/auth/mobile/exchange` et autoriser l'origine
+mobile.
 
 ## Comptes et session
 
@@ -84,6 +89,9 @@ L'origine de la WebView Android est `https://localhost` (iOS :
   côté API) ; l'inscription artiste se fait par email pour la collecter. Callback
   à déclarer dans la console Google :
   `http://localhost:3001/api/auth/google/callback`.
+  Dans l'app Android, Google s'ouvre dans le navigateur système et le retour se
+  fait par `com.imasomo.mixify://auth` (code court + PKCE) ; le web continue avec
+  `#token=`.
 
 ## Fonctionnalités
 

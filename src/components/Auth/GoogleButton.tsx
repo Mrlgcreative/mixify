@@ -1,14 +1,45 @@
-import { googleLoginUrl } from '../../api/musicApi';
+import { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+
+import { googleLoginUrl, startGoogleLogin } from '../../api/musicApi';
+import { useAuthStore } from '../../store/authStore';
+
+const buttonClass =
+  'mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-line bg-elevated px-4 py-2.5 text-sm font-semibold text-white transition hover:border-muted disabled:opacity-60';
 
 export function GoogleButton() {
+  const [opening, setOpening] = useState(false);
+
+  if (!Capacitor.isNativePlatform()) {
+    return (
+      <a href={googleLoginUrl()} className={buttonClass}>
+        <GoogleIcon />
+        Continuer avec Google
+      </a>
+    );
+  }
+
   return (
-    <a
-      href={googleLoginUrl()}
-      className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-line bg-elevated px-4 py-2.5 text-sm font-semibold text-white transition hover:border-muted"
+    <button
+      type="button"
+      disabled={opening}
+      className={buttonClass}
+      onClick={async () => {
+        setOpening(true);
+        try {
+          await startGoogleLogin();
+        } catch {
+          useAuthStore.setState({
+            error: 'Impossible d’ouvrir la connexion Google',
+          });
+        } finally {
+          setOpening(false);
+        }
+      }}
     >
       <GoogleIcon />
       Continuer avec Google
-    </a>
+    </button>
   );
 }
 

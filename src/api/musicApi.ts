@@ -1,4 +1,8 @@
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
+
 import type { AuthUser, Role } from '../types/auth';
+import { codeChallenge, parseMobileAuthUrl, randomVerifier } from '../utils/pkce';
 import type {
   Artist,
   ArtistDashboard,
@@ -54,14 +58,18 @@ export function setToken(token: string | null): void {
 /** Nonce à usage unique du retour Google, conservé dans l'onglet qui a lancé la connexion. */
 const OAUTH_NONCE_KEY = 'mixify.oauth_nonce';
 
+function randomNonce(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
 /** URL de départ de la connexion Google (retour sur le front avec #token=…&nonce=…). */
 export function googleLoginUrl(role?: Role): string {
   const query = new URLSearchParams();
   if (role === 'artiste') query.set('role', 'artiste');
   // Un lien #token=… forgé n'a pas ce nonce : il ne peut pas installer de session.
-  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
+  const nonce = randomNonce();
   try {
     sessionStorage.setItem(OAUTH_NONCE_KEY, nonce);
   } catch {
@@ -95,6 +103,87 @@ export function takeAuthCallback(): { token?: string; error?: string } {
     return { error: 'Lien de connexion invalide, réessayez' };
   }
   return { token };
+}
+
+/** PKCE et nonce du retour Google mobile, conservés hors de l'onglet web. */
+const MOBILE_OAUTH_KEY = 'mixify.oauth_mobile';
+const MOBILE_OAUTH_MAX_AGE = 10 * 60_000;
+
+/** Ouvre Google dans le navigateur système (app) ou redirige la page (web). */
+export async function startGoogleLogin(role?: Role): Promise<void> {
+  if (!Capacitor.isNativePlatform()) {
+    window.location.href = googleLoginUrl(role);
+    return;
+  }
+
+  const nonce = randomNonce();
+  const verifier = randomVerifier();
+  const challenge = await codeChallenge(verifier);
+  try {
+    localStorage.setItem(
+      MOBILE_OAUTH_KEY,
+      JSON.stringify({ verifier, nonce, at: Date.now() }),
+    );
+  } catch {
+    /* stockage indisponible : le retour sera refusé, pas de session au hasard */
+  }
+
+  const query = new URLSearchParams({
+    mobile: '1',
+    nonce,
+    code_challenge: challenge,
+  });
+  if (role === 'artiste') query.set('role', 'artiste');
+  await Browser.open({ url: `${BASE_URL}/api/auth/google?${query.toString()}` });
+}
+
+/** Échange le code court du deep link contre une session, via le verifier PKCE. */
+export async function completeMobileLogin(
+  rawUrl: string,
+): Promise<{ token?: string; error?: string }> {
+  const params = parseMobileAuthUrl(rawUrl);
+  if (!params) return {};
+
+  let stored: { verifier?: unknown; nonce?: unknown; at?: unknown } | null = null;
+  try {
+    stored = JSON.parse(localStorage.getItem(MOBILE_OAUTH_KEY) || 'null');
+    localStorage.removeItem(MOBILE_OAUTH_KEY);
+  } catch {
+    stored = null;
+  }
+
+  if (params.error) return { error: params.error };
+
+  const verifier = typeof stored?.verifier === 'string' ? stored.verifier : '';
+  const expectedNonce = typeof stored?.nonce === 'string' ? stored.nonce : '';
+  const issuedAt = typeof stored?.at === 'number' ? stored.at : 0;
+  if (
+    !params.code ||
+    !verifier ||
+    !params.nonce ||
+    params.nonce !== expectedNonce ||
+    Date.now() - issuedAt > MOBILE_OAUTH_MAX_AGE
+  ) {
+    return { error: 'Lien de connexion invalide, réessayez' };
+  }
+
+  try {
+    const response = await fetch(`${BASE_URL}/api/auth/mobile/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: params.code, verifier }),
+    });
+    const data = (await response.json()) as { token?: unknown; error?: unknown };
+    if (!response.ok || typeof data.token !== 'string') {
+      return {
+        error:
+          typeof data.error === 'string' ? data.error : 'Connexion Google impossible',
+      };
+    }
+    return { token: data.token };
+  } catch {
+    return { error: 'Connexion Google impossible, réessayez' };
+  }
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

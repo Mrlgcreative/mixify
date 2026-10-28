@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type UIEvent } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { Loader2 } from 'lucide-react';
 
+import { completeMobileLogin, setToken } from './api/musicApi';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { Onboarding } from './components/Onboarding/Onboarding';
 import { Header } from './components/Header/Header';
@@ -28,6 +31,9 @@ interface Navigation {
   stack: ViewName[];
   cursor: number;
 }
+
+/** Évite de traiter deux fois le même deep link (StrictMode / getLaunchUrl). */
+let lastAuthUrl = '';
 
 /** Identifiant de playlist depuis une URL `/playlist/<id>`. */
 function playlistIdFromPath(): string | null {
@@ -69,6 +75,37 @@ export default function App() {
   // Applique le thème (accent persistant) au montage.
   useEffect(() => {
     applyTheme({ ...theme, colors: { ...theme.colors, primary: getAccent() } });
+  }, []);
+
+  // Retour OAuth Google de l'app : deep link → code court → session.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let disposed = false;
+
+    const handle = async (url: string) => {
+      if (disposed || url === lastAuthUrl) return;
+      lastAuthUrl = url;
+      const result = await completeMobileLogin(url);
+      if (disposed) return;
+      if (result.token) {
+        setToken(result.token);
+        window.location.replace('/');
+      } else if (result.error) {
+        useAuthStore.setState({ error: result.error });
+      }
+    };
+
+    const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      void handle(url);
+    });
+    void CapacitorApp.getLaunchUrl().then((launch) => {
+      if (launch?.url) void handle(launch.url);
+    });
+
+    return () => {
+      disposed = true;
+      void listener.then((appListener) => appListener.remove());
+    };
   }, []);
 
   // La barre mobile se replie en défilant vers le bas (comme Apple Music) et
