@@ -170,7 +170,10 @@ export class AudioEngine {
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) throw new Error("Web Audio API indisponible sur ce navigateur.");
 
-    const ctx = new Ctor();
+    // `playback` : tampon de sortie plus large que le défaut `interactive`.
+    // Sur Android WebView, le petit tampon provoque des craquements quand le
+    // graphe (deux decks + SoundTouch) charge le thread audio.
+    const ctx = new Ctor({ latencyHint: 'playback' });
     this.ctx = ctx;
 
     this.master = ctx.createGain();
@@ -241,6 +244,12 @@ export class AudioEngine {
    * SoundTouch compense la hauteur). Une seule fois, decks à l'arrêt.
    */
   private prepareShifters(): Promise<void> {
+    // Sur mobile, le média préserve lui-même la hauteur lors du beat-sync :
+    // le worklet SoundTouch ajoute un traitement temps réel qui craque sur
+    // certaines WebView Android. Le web garde SoundTouch.
+    // shortcut: qualité de pitch native au lieu de SoundTouch sur mobile ;
+    // réactiver le worklet si le rendu des tempos mobiles devient un problème.
+    if (Capacitor.isNativePlatform()) return Promise.resolve();
     if (this.shifters) return this.shifters;
     const ctx = this.ctx;
     if (!ctx) return Promise.resolve();
