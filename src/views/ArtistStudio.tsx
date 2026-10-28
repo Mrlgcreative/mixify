@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   BadgeCheck,
+  Check,
+  Copy,
   Disc3,
   Globe,
   LayoutDashboard,
@@ -11,6 +13,7 @@ import {
   Trash2,
   Upload,
   UserRound,
+  Users,
   X,
 } from 'lucide-react';
 import { ImageUpload } from '../components/common/ImageUpload';
@@ -317,6 +320,10 @@ function Overview({
         <Stat label="Abonnés" value={artist.followers} />
       </section>
 
+      {data.referral?.code && (
+        <ReferralCard referral={data.referral} verified={artist.verified} />
+      )}
+
       {stats && <ListeningStats stats={stats} />}
 
       <section className="mt-8">
@@ -352,6 +359,69 @@ function Overview({
         )}
       </section>
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ parrainage
+
+function ReferralCard({
+  referral,
+  verified,
+}: {
+  referral: NonNullable<ArtistDashboard['referral']>;
+  verified?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const publicOrigin =
+    typeof window !== 'undefined' &&
+    !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
+      ? window.location.origin
+      : 'https://mixify.imasomo.com';
+  const link = `${publicOrigin}/?ref=${encodeURIComponent(referral.code ?? '')}`;
+  const remaining = Math.max(0, referral.required - referral.count);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* presse-papiers indisponible : le lien reste sélectionnable */
+    }
+  };
+
+  return (
+    <section className="mt-4 rounded-panel bg-card p-5">
+      <div className="flex items-center gap-2">
+        <Users size={18} className="text-primary" />
+        <h3 className="text-lg font-bold text-white">Parrainage</h3>
+        {verified && <BadgeCheck size={16} className="text-primary" aria-label="Certifié" />}
+      </div>
+      <p className="mt-1 text-sm text-muted">
+        {verified
+          ? 'Ton compte est certifié. Continue à inviter des personnes sur Mixify.'
+          : remaining > 0
+            ? `${referral.count} / ${referral.required} filleuls — invite ${remaining} personne${remaining > 1 ? 's' : ''} pour être certifié automatiquement.`
+            : `${referral.count} / ${referral.required} filleuls — certification en cours.`}
+      </p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          readOnly
+          value={link}
+          aria-label="Lien de parrainage"
+          onFocus={(event) => event.currentTarget.select()}
+          className="min-w-0 flex-1 rounded-card border border-line bg-elevated px-3 py-2.5 text-sm text-white focus:border-primary focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="flex items-center justify-center gap-2 rounded-card bg-primary px-4 py-2.5 text-sm font-bold text-black transition hover:scale-[1.01]"
+        >
+          {copied ? <Check size={15} /> : <Copy size={15} />}
+          {copied ? 'Copié' : 'Copier'}
+        </button>
+      </div>
+    </section>
   );
 }
 

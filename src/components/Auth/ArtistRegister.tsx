@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 import { useAuthStore } from '../../store/authStore';
-import { EMAIL_PATTERN, MIN_AGE, ageAt, maxBirthDate } from './authValidation';
+import { EMAIL_PATTERN, MIN_AGE, ageAt, maxBirthDate, referralCodeFromUrl } from './authValidation';
 import { inputClass, labelClass } from './authStyles';
 
 const STEPS = [
@@ -106,6 +106,7 @@ export function ArtistRegister() {
       name: name.trim(),
       role: 'artiste',
       birthDate,
+      referralCode: referralCodeFromUrl(),
       artist: {
         genres: genres.trim() || undefined,
         bio: bio.trim() || undefined,

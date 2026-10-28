@@ -68,6 +68,9 @@ function randomNonce(): string {
 export function googleLoginUrl(role?: Role): string {
   const query = new URLSearchParams();
   if (role === 'artiste') query.set('role', 'artiste');
+  // Parrainage : le code voyage dans le state OAuth, jamais dans le jeton.
+  const ref = new URLSearchParams(window.location.search).get('ref');
+  if (ref) query.set('ref', ref);
   // Un lien #token=… forgé n'a pas ce nonce : il ne peut pas installer de session.
   const nonce = randomNonce();
   try {
@@ -849,10 +852,11 @@ class MixifyApi implements MusicApi {
   async getMyArtist(): Promise<ArtistDashboard | null> {
     if (!getToken()) return null;
     try {
-      const { artiste, morceaux, stats } = await request<{
+      const { artiste, morceaux, stats, referral } = await request<{
         artiste: ApiArtist;
         morceaux: ApiTrack[];
         stats?: { total_duration_ms?: number };
+        referral?: ArtistDashboard['referral'];
       }>('/api/artists/me');
 
       const artist = toArtistProfile(artiste);
@@ -871,6 +875,7 @@ class MixifyApi implements MusicApi {
         totalDurationMs:
           stats?.total_duration_ms ??
           tracks.reduce((total, track) => total + track.duration * 1000, 0),
+        referral,
       };
     } catch (error) {
       // Pas encore de profil : l'espace artiste propose de le créer
@@ -1102,6 +1107,7 @@ export function registerRequest(input: {
   name: string;
   role: string;
   birthDate?: string;
+  referralCode?: string;
   artist?: {
     genres?: string;
     bio?: string;
@@ -1117,6 +1123,7 @@ export function registerRequest(input: {
       name: input.name,
       role: input.role,
       birth_date: input.birthDate,
+      referral_code: input.referralCode,
       artist: input.artist
         ? {
             genres: input.artist.genres,

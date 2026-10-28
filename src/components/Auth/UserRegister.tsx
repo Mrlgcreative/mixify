@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 import { useAuthStore } from '../../store/authStore';
 import { Divider, GoogleButton } from './GoogleButton';
-import { EMAIL_PATTERN, MIN_AGE, ageAt, maxBirthDate } from './authValidation';
+import { EMAIL_PATTERN, MIN_AGE, ageAt, maxBirthDate, referralCodeFromUrl } from './authValidation';
 import { inputClass, labelClass } from './authStyles';
 
 const STEPS = [
@@ -84,6 +84,7 @@ export function UserRegister() {
       name: name.trim(),
       role: 'utilisateur',
       birthDate,
+      referralCode: referralCodeFromUrl(),
     }).catch(() => undefined);
   };
 

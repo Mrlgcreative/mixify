@@ -2,6 +2,13 @@
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const MIN_AGE = 13;
 
+/** Code de parrainage présent dans l'URL (`?ref=slug-artiste`). */
+export function referralCodeFromUrl(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const code = new URLSearchParams(window.location.search).get('ref')?.trim();
+  return code || undefined;
+}
+
 /** Âge révolu à une date AAAA-MM-JJ, ou null si la date est invalide. */
 export function ageAt(value: string): number | null {
   const date = new Date(`${value}T00:00:00`);

@@ -34,6 +34,12 @@ export interface ArtistDashboard {
   artist: ArtistProfile;
   tracks: Track[];
   totalDurationMs: number;
+  /** Parrainage : code public, filleuls comptés et seuil de certification. */
+  referral?: {
+    code: string | null;
+    count: number;
+    required: number;
+  };
 }
 
 /** Statistiques d'écoute d'un artiste (miroir de `GET /api/artists/me/stats`). */

@@ -17,6 +17,7 @@ interface AuthStore {
     name: string;
     role: Role;
     birthDate?: string;
+    referralCode?: string;
     artist?: ArtistSignupDetails;
     verification?: Record<string, unknown>;
   }) => Promise<void>;
