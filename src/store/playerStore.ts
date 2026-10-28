@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { Capacitor } from '@capacitor/core';
+import { MediaSession } from '@capgo/capacitor-media-session';
 
 import { api } from '../api/musicApi';
 import { engine } from '../audio/engine';
@@ -7,15 +9,30 @@ import { MAX_CROSSFADE_SECONDS, MIN_CROSSFADE_SECONDS } from '../audio/crossfade
 import type { MixPlan, PlayerState, RepeatMode, Track, TransitionMode } from '../types/music';
 
 const mediaSession = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
+/** Service Android de lecture en arrière-plan (notification + session média). */
+const isNative = Capacitor.isNativePlatform();
 let wakeLock: WakeLockSentinel | null = null;
 
 function setMediaMetadata(track: Track | null): void {
+  const artwork = track ? (track.album?.coverUrl ?? track.coverUrl) : undefined;
+  if (isNative) {
+    void MediaSession.setMetadata({
+      title: track?.title ?? '',
+      artist: track?.artist?.name ?? '',
+      album: track?.album?.title ?? '',
+      // shortcut: pas de pochette native, le plugin la télécharge sur le
+      // thread principal (NetworkOnMainThreadException) ; passer une data URL
+      // si la pochette devient nécessaire dans la notification.
+      artwork: [],
+    }).catch(() => {
+      /* notification indisponible : la lecture continue */
+    });
+  }
   if (!mediaSession) return;
   if (!track) {
     mediaSession.metadata = null;
     return;
   }
-  const artwork = track.album?.coverUrl ?? track.coverUrl;
   try {
     mediaSession.metadata = new MediaMetadata({
       title: track.title,
@@ -31,6 +48,11 @@ function setMediaMetadata(track: Track | null): void {
 }
 
 function setMediaPlaybackState(state: 'playing' | 'paused' | 'none'): void {
+  if (isNative) {
+    void MediaSession.setPlaybackState({ playbackState: state }).catch(() => {
+      /* service arrêté : la lecture continue */
+    });
+  }
   if (!mediaSession) return;
   try {
     mediaSession.playbackState = state;
@@ -278,6 +300,36 @@ export const usePlayer = create<PlayerStore>((set, get) => {
     onMixStart: () => set({ mixing: true }),
     onMixEnd: () => set({ mixing: false }),
   });
+
+  // Service média natif : garde l'app vivante en arrière-plan et pilote la
+  // lecture depuis la notification / l'écran verrouillé.
+  if (isNative) {
+    const bind = (
+      action: 'play' | 'pause' | 'nexttrack' | 'previoustrack',
+      run: () => void,
+    ) => {
+      void MediaSession.setActionHandler({ action }, run).catch(() => {
+        /* action non supportée */
+      });
+    };
+    bind('play', () => {
+      if (!get().isPlaying) void get().toggle();
+    });
+    bind('pause', () => {
+      if (get().isPlaying) void get().toggle();
+    });
+    bind('nexttrack', () => {
+      void get().next();
+    });
+    bind('previoustrack', () => {
+      void get().previous();
+    });
+    void MediaSession.setActionHandler({ action: 'seekto' }, (details) => {
+      if (typeof details.seekTime === 'number') get().seek(details.seekTime);
+    }).catch(() => {
+      /* seek non supporté */
+    });
+  }
 
   if (mediaSession) {
     try {

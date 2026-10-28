@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { SoundTouchNode } from '@soundtouchjs/audio-worklet';
 import processorUrl from '@soundtouchjs/audio-worklet/processor?url';
 import { guess } from 'web-audio-beat-detector';
@@ -22,6 +23,9 @@ import {
 import { detectKey, harmonicCost, harmonicFadeCap, type KeyEstimate } from './harmony';
 import { analyzeTail, type TailInfo } from './tail';
 import { estimateTempo, type TempoEstimate } from './tempo';
+
+/** Préfixe analysé sur mobile : ~40–90 s de MP3, assez pour tempo et tonalité. */
+const NATIVE_ANALYSIS_BYTES = 1_500_000;
 
 /**
  * Moteur audio à double deck (Web Audio API).
@@ -139,6 +143,8 @@ export class AudioEngine {
   /** Fin estimée par URL (null = analyse non concluante, voir tail.ts). */
   private readonly tails = new Map<string, TailInfo | null>();
   private readonly analyzing = new Set<string>();
+  /** Une seule analyse à la fois : deux décodages simultanés saturent la mémoire Android. */
+  private analysisQueue: Promise<void> = Promise.resolve();
 
   /** Branchement du worklet SoundTouch (une seule fois par contexte). */
   private shifters: Promise<void> | null = null;
@@ -752,12 +758,17 @@ export class AudioEngine {
   private startBeatAnalysis(url: string): void {
     if (!url || this.analyzing.has(url) || this.beats.has(url)) return;
     this.analyzing.add(url);
-    void this.analyze(url).then(({ tempo, key, tail }) => {
-      this.beats.set(url, tempo);
-      this.keys.set(url, key);
-      this.tails.set(url, tail);
-      this.analyzing.delete(url);
-    });
+    this.analysisQueue = this.analysisQueue
+      .then(() => this.analyze(url))
+      .then(({ tempo, key, tail }) => {
+        this.beats.set(url, tempo);
+        this.keys.set(url, key);
+        this.tails.set(url, tail);
+      })
+      .catch(() => {
+        /* analyse impossible : fondu simple */
+      })
+      .finally(() => this.analyzing.delete(url));
   }
 
   private async analyze(
@@ -765,8 +776,17 @@ export class AudioEngine {
   ): Promise<{ tempo: TempoEstimate | null; key: KeyEstimate | null; tail: TailInfo | null }> {
     const ctx = this.ctx;
     if (!ctx) return { tempo: null, key: null, tail: null };
+    const native = Capacitor.isNativePlatform();
     try {
-      const response = await fetch(url);
+      // Sur mobile, `decodeAudioData` du fichier entier (~1,7 Mo de PCM par
+      // seconde) fait tuer la WebView par Android. Un préfixe suffit au tempo
+      // et à la tonalité ; la fin (tail) n'est alors pas analysable.
+      const response = await fetch(
+        url,
+        native
+          ? { headers: { Range: `bytes=0-${NATIVE_ANALYSIS_BYTES - 1}` } }
+          : undefined,
+      );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       // shortcut: decodeAudioData décompresse tout le fichier en PCM flottant
       // (~1,7 Mo/s stéréo) ; pour des médias de plusieurs dizaines de minutes,
@@ -776,7 +796,7 @@ export class AudioEngine {
       return {
         tempo: (await libraryTempo(audio)) ?? estimateTempo(mono, audio.sampleRate),
         key: detectKey(mono, audio.sampleRate),
-        tail: analyzeTail(mono, audio.sampleRate),
+        tail: native ? null : analyzeTail(mono, audio.sampleRate),
       };
     } catch {
       return { tempo: null, key: null, tail: null }; // flux non récupérable : fondu simple

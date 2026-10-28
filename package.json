@@ -16,6 +16,7 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/browser": "^8.0.5",
     "@capacitor/core": "^8.5.3",
+    "@capgo/capacitor-media-session": "^8.1.6",
     "@soundtouchjs/audio-worklet": "^2.1.1",
     "lucide-react": "^0.462.0",
     "react": "^18.3.1",
