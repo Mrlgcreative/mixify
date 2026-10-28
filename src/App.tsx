@@ -251,7 +251,10 @@ export default function App() {
   return (
     // La clé remonte les vues après connexion/déconnexion : les données
     // dépendant du compte (bibliothèque, playlists) sont rechargées.
-    <div key={user?.id ?? 'invite'} className="bg-grid flex h-full flex-col overflow-hidden bg-bg text-text">
+    <div
+      key={user?.id ?? 'invite'}
+      className="bg-grid flex h-full flex-col overflow-hidden bg-bg pt-[env(safe-area-inset-top)] text-text"
+    >
       <div className="flex min-h-0 flex-1 gap-0 overflow-hidden p-0 md:gap-2 md:p-2">
         <Sidebar
           view={playlistRoute ? 'library' : view}
@@ -263,7 +266,9 @@ export default function App() {
         <main
           className={`flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-panel md:bg-grid md:bg-panel md:pb-0 ${
             hasTrack
-              ? 'pb-[calc(104px+64px+env(safe-area-inset-bottom)+16px)]'
+              ? compactNav
+                ? 'pb-[calc(80px+env(safe-area-inset-bottom))]' // lecteur compact dans la barre de tabs
+                : 'pb-[calc(104px+64px+env(safe-area-inset-bottom)+16px)]'
               : 'pb-[calc(72px+env(safe-area-inset-bottom)+12px)]'
           }`}
         >
@@ -295,18 +300,17 @@ export default function App() {
                 )}
               </>
             )}
+
+            <Player compact={compactNav} onOpenArtist={openArtist} />
+            <MobileNav
+              view={playlistRoute ? 'library' : view}
+              onNavigate={navigate}
+              compact={compactNav}
+            />
           </div>
         </main>
-
         {queueOpen && <QueuePanel />}
       </div>
-
-      <Player compact={compactNav} onOpenArtist={openArtist} />
-      <MobileNav
-        view={playlistRoute ? 'library' : view}
-        onNavigate={navigate}
-        compact={compactNav}
-      />
     </div>
   );
 }

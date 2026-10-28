@@ -50,7 +50,7 @@ export function Player({ onOpenArtist, compact = false }: PlayerProps) {
   return (
     <>
       <footer
-        className={`glass fixed z-30 flex shrink-0 items-center gap-2 md:relative md:bottom-auto md:left-auto md:right-auto md:z-auto md:mx-2 md:mb-2 md:h-[88px] md:gap-4 md:rounded-[24px] md:px-4 motion-safe:transition-[bottom,left,right,height,border-radius] motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none ${
+        className={`glass fixed z-30 flex shrink-0 items-center gap-2 md:sticky md:bottom-0 md:left-auto md:right-auto md:z-10 md:mx-2 md:mb-2 md:h-[88px] md:gap-4 md:rounded-[24px] md:px-4 motion-safe:transition-[bottom,left,right,height,border-radius] motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none ${
           compact
             ? 'bottom-[calc(8px+env(safe-area-inset-bottom))] left-[60px] right-[60px] h-[60px] rounded-full px-2'
             : 'bottom-[calc(104px+env(safe-area-inset-bottom))] left-2 right-2 h-[72px] rounded-[22px] px-3'

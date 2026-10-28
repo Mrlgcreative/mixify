@@ -16,7 +16,7 @@ export function QueuePanel() {
   const clearQueue = usePlayer((s) => s.clearQueue);
 
   return (
-    <aside className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-panel pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:w-[320px] lg:shrink-0 lg:rounded-panel lg:pb-0">
+    <aside className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-panel pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:static lg:z-auto lg:w-[320px] lg:shrink-0 lg:rounded-panel lg:py-0">
       <header className="flex items-center gap-1 border-b border-line px-3 py-2">
         <button
           type="button"
