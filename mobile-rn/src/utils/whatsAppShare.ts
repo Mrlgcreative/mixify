@@ -1,7 +1,4 @@
-import { Platform } from 'react-native';
-
-// URL de l'API backend (dérivée de l'URL de l'app, ou configurable)
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.mixify.imasomo.com';
+import { API_URL } from '@/api/musicApi';
 
 /**
  * Partage un titre audio vers WhatsApp (Story + Chat) via l'API backend.
@@ -21,7 +18,7 @@ export async function shareTrackToWhatsApp({
   phoneNumberId: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/whatsapp/send`, {
+    const response = await fetch(`${API_URL}/api/whatsapp/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
