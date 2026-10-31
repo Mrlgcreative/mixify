@@ -39,17 +39,10 @@ export function TrackShareView({ id }: { id: string }) {
         <Loader2 size={20} className="animate-spin text-muted" />
       ) : (
         <article className="flex w-full max-w-sm flex-col items-center gap-5">
-          {track.cover_url ? (
-            <img
-              src={track.cover_url}
-              alt={track.title}
-              className="aspect-square w-full rounded-panel object-cover shadow-card"
-            />
-          ) : (
-            <div className="flex aspect-square w-full items-center justify-center rounded-panel bg-elevated text-6xl text-primary">
-              M
-            </div>
-          )}
+          {/* Carte générique « Mixify » à la place de la pochette. */}
+          <div className="flex aspect-square w-full items-center justify-center rounded-panel bg-elevated text-6xl text-primary shadow-card">
+            M
+          </div>
 
           <div className="text-center">
             <h1 className="text-2xl font-bold">{track.title}</h1>
@@ -63,10 +56,7 @@ export function TrackShareView({ id }: { id: string }) {
             <p className="text-sm text-muted">Aucun fichier audio disponible.</p>
           )}
 
-          <a
-            href="/"
-            className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-contrast"
-          >
+          <a href="/" className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-contrast">
             Écouter sur Mixify
           </a>
         </article>
