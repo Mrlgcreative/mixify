@@ -1,0 +1,6 @@
+# Route publique `/track/<id>` : rendue par le client React, pas par un fichier.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^track/[^/]+/?$ index.html [L]
+</IfModule>

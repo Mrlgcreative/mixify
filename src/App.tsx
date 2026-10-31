@@ -20,6 +20,7 @@ import { SearchView } from './views/Search';
 import { ChartsView } from './views/Charts';
 import { AlbumDetail } from './views/AlbumDetail';
 import { ArtistDetail } from './views/ArtistDetail';
+import { TrackShareView } from './views/TrackShare';
 import { useAuthStore } from './store/authStore';
 import { useFollows } from './store/followsStore';
 import { useLibraryStore } from './store/libraryStore';
@@ -38,6 +39,17 @@ let lastAuthUrl = '';
 /** Identifiant de playlist depuis une URL `/playlist/<id>`. */
 function playlistIdFromPath(): string | null {
   const match = window.location.pathname.match(/^\/playlist\/([^/]+)\/?$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+/** Identifiant de morceau depuis l'URL publique de partage `/track/<id>`. */
+function sharedTrackIdFromPath(): string | null {
+  const match = window.location.pathname.match(/^\/track\/([^/]+)\/?$/);
   if (!match) return null;
   try {
     return decodeURIComponent(match[1]);
@@ -177,6 +189,10 @@ export default function App() {
     setAuthMode(next);
     setOnboarded(true);
   };
+
+  // Lien de partage public : la carte du morceau s'affiche sans compte.
+  const sharedTrackId = sharedTrackIdFromPath();
+  if (sharedTrackId) return <TrackShareView id={sharedTrackId} />;
 
   if (!onboarded) return <Onboarding onFinish={finishOnboarding} />;
 
